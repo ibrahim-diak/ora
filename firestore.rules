@@ -1,22 +1,27 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Sécurité par défaut : rejet de tout accès non explicite
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    /* =====================================================
+       FONCTIONS DE BASE
+    ====================================================== */
 
-    // Fonctions d'authentification et de vérification d'identité
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Vérifie si l'utilisateur est propriétaire du document (soit par UID, soit par Email Lumesys)
+    /*
+     * Vérifie que l'utilisateur connecté est propriétaire
+     * du document, soit par UID, soit par adresse email.
+     */
     function isAccountOwner(userKey) {
       return isSignedIn() && (
         request.auth.uid == userKey ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == userKey.lower())
+        (
+          request.auth.token.email != null &&
+          request.auth.token.email.lower() == userKey.lower()
+        )
       );
     }
 
@@ -28,81 +33,340 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // ==========================================
-    // 1. UTILISATEURS (Collection existante Lumesys)
-    // ==========================================
-    match /utilisateurs/{userKey} {
-      // Lecture permise pour l'annuaire et la recherche par les membres connectés
-      allow get, list: if isSignedIn();
-
-      // Création et mise à jour strictement limitées au titulaire du compte
-      allow create, update: if isAccountOwner(userKey);
-
-      // Préservation des comptes dans l'écosystème Lumesys
-      allow delete: if false;
-    }
-
-    // ==========================================
-    // 2. PROFILS PUBLICS (Collection Lumesys pour la découverte messagerie)
-    // ==========================================
-    match /public_profiles/{userKey} {
-      allow get, list: if isSignedIn();
-      allow create, update: if isAccountOwner(userKey);
-      allow delete: if false;
-    }
-
-    // ==========================================
-    // 3. CONVERSATIONS
-    // ==========================================
+    /*
+     * Vérifie qu'un utilisateur connecté appartient
+     * à une conversation.
+     *
+     * Les conversations LUMA utilisent actuellement
+     * les UID Firebase dans le tableau participants.
+     *
+     * La compatibilité email est conservée pour les
+     * anciennes conversations éventuelles.
+     */
     function isConversationParticipant(convData) {
-      return isSignedIn() && (
-        request.auth.uid in convData.participants ||
-        (request.auth.token.email != null && request.auth.token.email in convData.participants)
+      return isSignedIn()
+        && convData.participants is list
+        && (
+          request.auth.uid in convData.participants ||
+          (
+            request.auth.token.email != null &&
+            request.auth.token.email in convData.participants
+          )
+        );
+    }
+
+
+    /* =====================================================
+       1. PROFIL UTILISATEUR
+       Collection : utilisateurs/{email}
+    ====================================================== */
+
+    match /utilisateurs/{userKey} {
+
+      /*
+       * Les utilisateurs authentifiés peuvent consulter
+       * les profils nécessaires à l'annuaire LUMA.
+       */
+      allow get, list: if isSignedIn();
+
+      /*
+       * Création et modification uniquement par le propriétaire.
+       *
+       * Compatible avec :
+       * - document identifié par email
+       * - document identifié par UID
+       */
+      allow create, update: if isAccountOwner(userKey);
+
+      /*
+       * Pas de suppression depuis le client.
+       */
+      allow delete: if false;
+    }
+
+
+    /* =====================================================
+       2. PROFILS PUBLICS
+       Collection : public_profiles/{email}
+    ====================================================== */
+
+    match /public_profiles/{userKey} {
+
+      /*
+       * Les utilisateurs authentifiés peuvent rechercher
+       * les profils publics.
+       */
+      allow get, list: if isSignedIn();
+
+      /*
+       * Seul le propriétaire peut créer ou modifier
+       * son profil public.
+       */
+      allow create, update: if isAccountOwner(userKey)
+        && isValidPublicProfile();
+
+      /*
+       * Pas de suppression depuis le client.
+       */
+      allow delete: if false;
+    }
+
+
+    /* =====================================================
+       3. COLLECTION USERS
+       Compatibilité avec le MVP LUMA
+    ====================================================== */
+
+    match /users/{userId} {
+
+      /*
+       * Les utilisateurs authentifiés peuvent lire
+       * les profils nécessaires à LUMA.
+       */
+      allow read: if isSignedIn();
+
+      /*
+       * Seul l'utilisateur correspondant au UID
+       * peut créer ou modifier son document.
+       */
+      allow create, update:
+        if isSignedIn()
+        && request.auth.uid == userId;
+
+      /*
+       * Pas de suppression depuis le client.
+       */
+      allow delete: if false;
+    }
+
+
+    /* =====================================================
+       4. CONVERSATIONS
+       Collection : conversations/{conversationId}
+    ====================================================== */
+
+    match /conversations/{conversationId} {
+
+      /*
+       * LECTURE DIRECTE
+       *
+       * Un utilisateur peut lire une conversation
+       * uniquement s'il en est participant.
+       */
+      allow get: if isSignedIn()
+        && isConversationParticipant(existing());
+
+
+      /*
+       * LISTE DES CONVERSATIONS
+       *
+       * IMPORTANT :
+       * database.js utilise :
+       *
+       * where(
+       *   'participants',
+       *   'array-contains',
+       *   userId
+       * )
+       *
+       * Cette autorisation permet donc à un utilisateur
+       * de lister uniquement les conversations dont il
+       * est participant.
+       */
+      allow list: if isSignedIn()
+        && isConversationParticipant(resource.data);
+
+
+      /*
+       * CRÉATION D'UNE CONVERSATION
+       *
+       * Conditions :
+       * - utilisateur authentifié ;
+       * - participants = tableau ;
+       * - minimum 2 participants ;
+       * - l'utilisateur connecté doit être participant.
+       */
+      allow create: if isSignedIn()
+        && incoming().participants is list
+        && incoming().participants.size() >= 2
+        && request.auth.uid in incoming().participants;
+
+
+      /*
+       * MODIFICATION D'UNE CONVERSATION
+       *
+       * Seuls les participants peuvent modifier
+       * les métadonnées.
+       *
+       * Le tableau participants ne peut pas être modifié.
+       */
+      allow update: if isSignedIn()
+        && isConversationParticipant(existing())
+        && (
+          !('participants' in incoming()) ||
+          incoming().participants == existing().participants
+        );
+
+
+      /*
+       * Pas de suppression depuis le client.
+       */
+      allow delete: if false;
+
+
+      /* ===================================================
+         5. MESSAGES
+         conversations/{id}/messages/{messageId}
+      ==================================================== */
+
+      match /messages/{messageId} {
+
+        /*
+         * LECTURE DES MESSAGES
+         *
+         * Seuls les participants de la conversation
+         * peuvent lire ses messages.
+         */
+        allow get, list: if isSignedIn()
+          && isConversationParticipant(
+            get(
+              /databases/$(database)/documents/conversations/$(conversationId)
+            ).data
+          );
+
+
+        /*
+         * CRÉATION D'UN MESSAGE
+         *
+         * Conditions :
+         * - utilisateur connecté ;
+         * - participant de la conversation ;
+         * - expediteurId = UID connecté ;
+         * - contenu texte ;
+         * - contenu non vide ;
+         * - maximum 5000 caractères.
+         */
+        allow create: if isSignedIn()
+          && isConversationParticipant(
+            get(
+              /databases/$(database)/documents/conversations/$(conversationId)
+            ).data
+          )
+          && incoming().expediteurId == request.auth.uid
+          && incoming().contenu is string
+          && incoming().contenu.size() > 0
+          && incoming().contenu.size() <= 5000;
+
+
+        /*
+         * MISE À JOUR DES MESSAGES
+         *
+         * Les participants peuvent modifier les messages,
+         * notamment pour gérer les accusés de lecture.
+         */
+        allow update: if isSignedIn()
+          && isConversationParticipant(
+            get(
+              /databases/$(database)/documents/conversations/$(conversationId)
+            ).data
+          );
+
+
+        /*
+         * Pas de suppression depuis le client.
+         */
+        allow delete: if false;
+      }
+    }
+
+
+    /* =====================================================
+       6. BOURSES AUTOMATIQUEMENT COLLECTÉES
+       Collection : bourses_auto/{bourseId}
+    ====================================================== */
+
+    match /bourses_auto/{bourseId} {
+
+      /*
+       * Lecture uniquement des bourses actives.
+       */
+      allow read: if resource.data.active == true;
+
+      /*
+       * Collection alimentée automatiquement.
+       * Aucun utilisateur ne peut la modifier.
+       */
+      allow create, update, delete: if false;
+    }
+
+
+    /* =====================================================
+       7. VALIDATION DES PROFILS PUBLICS
+    ====================================================== */
+
+    function isValidPublicProfile() {
+
+      /*
+       * Champs obligatoires.
+       */
+      return request.resource.data.keys().hasAll([
+        "prenom",
+        "nom",
+        "sexe",
+        "ville",
+        "region",
+        "pays",
+        "photo"
+      ])
+
+      /*
+       * Champs autorisés.
+       *
+       * "email" a été ajouté car database.js
+       * l'enregistre réellement dans public_profiles.
+       */
+      && request.resource.data.keys().hasOnly([
+        "prenom",
+        "nom",
+        "sexe",
+        "ville",
+        "region",
+        "pays",
+        "photo",
+        "telephone",
+        "email",
+        "updatedAt"
+      ])
+
+      /*
+       * Vérification des types.
+       */
+      && request.resource.data.prenom is string
+      && request.resource.data.nom is string
+      && request.resource.data.sexe is string
+      && request.resource.data.ville is string
+      && request.resource.data.region is string
+      && request.resource.data.pays is string
+      && request.resource.data.photo is string
+
+      && (
+        !("telephone" in request.resource.data)
+        || request.resource.data.telephone is string
+      )
+
+      && (
+        !("email" in request.resource.data)
+        || request.resource.data.email is string
       );
     }
 
-    match /conversations/{conversationId} {
-      // Un membre ne peut lire et lister que les discussions dont il est participant
-      allow get: if isSignedIn() && isConversationParticipant(existing());
-      allow list: if isSignedIn();
 
-      // Création : l'utilisateur authentifié doit être inclus dans la liste des participants
-      allow create: if isSignedIn() &&
-                    incoming().participants is list &&
-                    incoming().participants.size() >= 2 &&
-                    (
-                      request.auth.uid in incoming().participants ||
-                      (request.auth.token.email != null && request.auth.token.email in incoming().participants)
-                    );
+    /* =====================================================
+       8. REFUS PAR DÉFAUT
+    ====================================================== */
 
-      // Mise à jour : actualisation du dernier message ou métadonnées par un participant
-      allow update: if isSignedIn() &&
-                    isConversationParticipant(existing()) &&
-                    // Interdiction de modifier la liste des participants existants sans accord
-                    (!('participants' in incoming()) || incoming().participants == existing().participants);
-
-      allow delete: if false;
-
-      // ==========================================
-      // 4. SOUS-COLLECTION MESSAGES
-      // ==========================================
-      match /messages/{messageId} {
-        allow get, list: if isSignedIn() &&
-                         isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
-
-        allow create: if isSignedIn() &&
-                      isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data) &&
-                      (incoming().expediteurId == request.auth.uid || incoming().expediteurId == request.auth.token.email) &&
-                      incoming().contenu is string &&
-                      incoming().contenu.size() > 0 &&
-                      incoming().contenu.size() <= 4000;
-
-        // Mise à jour autorisée pour l'accusé de lecture ('lu': true) par un participant
-        allow update: if isSignedIn() &&
-                      isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
-
-        allow delete: if false;
-      }
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
