@@ -385,8 +385,24 @@ export const ChatController = {
       );
     } catch (err) {
       console.error('Erreur envoi message:', err);
-      alert('Échec de l\'envoi du message.');
+      this.showToast('Échec de l\'envoi du message.');
     }
+  },
+
+  showToast(message) {
+    let toast = document.getElementById('chat-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'chat-toast';
+      toast.className = 'fixed bottom-4 right-4 z-50 bg-rose-600 text-white text-xs px-4 py-2 rounded-xl shadow-lg transition-opacity duration-300';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.remove('hidden', 'opacity-0');
+    setTimeout(() => {
+      toast.classList.add('opacity-0');
+      setTimeout(() => toast.classList.add('hidden'), 300);
+    }, 3000);
   },
 
   toggleMobileView(view) {

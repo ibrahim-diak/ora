@@ -36,8 +36,8 @@ export const AuthService = {
       currentUser = user;
       if (user) {
         try {
-          // 1. Chercher d'abord le profil par UID dans la collection `utilisateurs`
-          let profile = await Database.getUtilisateurByUid(user.uid);
+          // 1. Chercher d'abord le profil par UID ou Email dans la collection `utilisateurs`
+          let profile = await Database.getUtilisateurByUid(user.uid, user.email);
 
           // 2. Si non trouvé, vérifier par email pour préserver un compte préexistant de Lumesys
           if (!profile && user.email) {

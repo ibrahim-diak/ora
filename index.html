@@ -121,80 +121,40 @@
 
     </div>
 
-    <!-- Guide de déploiement GitHub Pages & Configuration Firebase -->
-    <div id="firebase-setup" class="mt-16 w-full bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-2xs">
+    <!-- Indicateur d'infrastructure Firebase connectée -->
+    <div class="mt-16 w-full bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-2xs">
       <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
         <div>
-          <h3 class="text-sm font-bold text-slate-900">Configuration de l'instance Firebase Lumesys</h3>
-          <p class="text-xs text-slate-500">Connexion sécurisée directe depuis le navigateur sans exposer de clé privée côté serveur</p>
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h3 class="text-sm font-bold text-slate-900">Infrastructure Firebase Connectée</h3>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">Instance de production : <span class="font-mono font-semibold text-teal-700">lumina-analytics</span> (Écosystème Lumesys)</p>
         </div>
-        <button id="open-config-btn" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors">
-          Renseigner mes identifiants
-        </button>
+        <span class="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-full flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Synchronisation active
+        </span>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600">
         <div>
-          <h4 class="font-semibold text-slate-800 mb-1">Structure Firestore requise :</h4>
+          <h4 class="font-semibold text-slate-800 mb-1">Collections synchronisées :</h4>
           <ul class="list-disc list-inside space-y-1 text-slate-500">
-            <li>Collection existante : <code class="text-teal-700">utilisateurs/{userId}</code></li>
-            <li>Collection de messagerie : <code class="text-teal-700">conversations/{conversationId}</code></li>
-            <li>Sous-collection : <code class="text-teal-700">conversations/{id}/messages/{messageId}</code></li>
+            <li>Collection d'utilisateurs : <code class="text-teal-700">utilisateurs</code> & <code class="text-teal-700">public_profiles</code></li>
+            <li>Messagerie temps réel : <code class="text-teal-700">conversations/{id}/messages</code></li>
+            <li>Chiffrement & Sécurité : <code class="text-teal-700">firestore.rules (Zéro-Trust)</code></li>
           </ul>
         </div>
         <div>
           <h4 class="font-semibold text-slate-800 mb-1">Compatibilité GitHub Pages :</h4>
           <p class="text-slate-500 leading-relaxed">
-            Pour déployer sur GitHub Pages, poussez ce dépôt sur GitHub, activez <strong>Pages</strong> dans les réglages (branche <em>main</em>, dossier <em>root</em> ou <em>dist</em>), et accédez à votre URL gratuite <code>https://MON-COMPTE.github.io/MON-REPOSITORY/</code>.
+            Hébergement statique sous dépôt <code>ora</code>, routage avec chemins relatifs <code>./</code>, et installation PWA sur mobile et ordinateur.
           </p>
         </div>
       </div>
     </div>
 
   </main>
-
-  <!-- Modale de configuration Firebase -->
-  <div id="config-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
-      <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
-        <h3 class="text-base font-bold text-slate-900">Configuration Firebase Lumesys</h3>
-        <button id="close-config-btn" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
-      </div>
-      <p class="text-xs text-slate-500 mb-4">
-        Vos clés sont stockées localement dans votre navigateur et transmises exclusivement aux serveurs officiels de Google Firebase.
-      </p>
-      <form id="firebase-config-form" class="space-y-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">API Key</label>
-          <input id="input-api-key" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="AIzaSy...">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Auth Domain</label>
-          <input id="input-auth-domain" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="lumesys-app.firebaseapp.com">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Project ID</label>
-          <input id="input-project-id" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="lumesys-app">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Storage Bucket (Optionnel)</label>
-          <input id="input-storage-bucket" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" placeholder="lumesys-app.appspot.com">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">App ID</label>
-          <input id="input-app-id" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="1:123456789:web:abcdef">
-        </div>
-        <div class="pt-3 flex gap-2 justify-end">
-          <button type="button" id="cancel-config-btn" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">
-            Annuler
-          </button>
-          <button type="submit" class="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold">
-            Enregistrer & Actualiser
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <!-- Pied de page -->
   <footer class="w-full bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
@@ -211,7 +171,6 @@
   <!-- Script de détection d'authentification et routage -->
   <script type="module">
     import { AuthService } from './js/auth.js';
-    import { getStoredFirebaseConfig, saveFirebaseConfig } from './js/firebase-config.js';
 
     // Mise à jour des boutons de navigation selon la session
     AuthService.init((user) => {
@@ -229,45 +188,6 @@
         if (loginLink) loginLink.classList.remove('hidden');
       }
     });
-
-    // Gestion de la modale de config
-    const configBtn = document.getElementById('open-config-btn');
-    const configModal = document.getElementById('config-modal');
-    const closeConfigBtn = document.getElementById('close-config-btn');
-    const cancelConfigBtn = document.getElementById('cancel-config-btn');
-    const form = document.getElementById('firebase-config-form');
-
-    const openModal = () => {
-      const stored = getStoredFirebaseConfig() || {};
-      document.getElementById('input-api-key').value = stored.apiKey || '';
-      document.getElementById('input-auth-domain').value = stored.authDomain || '';
-      document.getElementById('input-project-id').value = stored.projectId || '';
-      document.getElementById('input-storage-bucket').value = stored.storageBucket || '';
-      document.getElementById('input-app-id').value = stored.appId || '';
-      configModal.classList.remove('hidden');
-    };
-
-    const closeModal = () => configModal.classList.add('hidden');
-
-    if (configBtn) configBtn.addEventListener('click', openModal);
-    if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeModal);
-    if (cancelConfigBtn) cancelConfigBtn.addEventListener('click', closeModal);
-
-    if (form) {
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const cfg = {
-          apiKey: document.getElementById('input-api-key').value.trim(),
-          authDomain: document.getElementById('input-auth-domain').value.trim(),
-          projectId: document.getElementById('input-project-id').value.trim(),
-          storageBucket: document.getElementById('input-storage-bucket').value.trim(),
-          appId: document.getElementById('input-app-id').value.trim(),
-        };
-        if (saveFirebaseConfig(cfg)) {
-          window.location.reload();
-        }
-      });
-    }
   </script>
 </body>
 </html>

@@ -37,7 +37,7 @@ async function initApp() {
 
   // Enregistrement du Service Worker pour PWA
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/public/service-worker.js').catch((e) => {
+    navigator.serviceWorker.register('./service-worker.js').catch((e) => {
       console.warn('Service Worker non enregistré:', e);
     });
   }

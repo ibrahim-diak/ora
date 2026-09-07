@@ -27,15 +27,14 @@ export function getStoredFirebaseConfig() {
   try {
     const raw = localStorage.getItem(STORAGE_CONFIG_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Si la configuration stockée n'est pas un placeholder factice, on la prend, sinon lumina-analytics
+      if (parsed && parsed.projectId && parsed.projectId !== 'lumesys-app' && parsed.apiKey && !parsed.apiKey.includes('...')) {
+        return parsed;
+      }
     }
   } catch (e) {
     console.warn('Erreur lors de la lecture de la configuration locale:', e);
-  }
-
-  // Vérifier si une configuration globale a été injectée
-  if (window.__LUMESYS_FIREBASE_CONFIG__) {
-    return window.__LUMESYS_FIREBASE_CONFIG__;
   }
 
   // Utiliser la configuration réelle de Lumesys / Lumina

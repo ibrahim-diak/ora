@@ -49,6 +49,7 @@
         <div id="profile-success-msg" class="hidden mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl text-center font-medium">
           Profil mis à jour avec succès dans l'écosystème Lumesys !
         </div>
+        <div id="profile-error-msg" class="hidden mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl text-center font-medium"></div>
 
         <form id="profile-form" class="space-y-4">
           
@@ -165,7 +166,13 @@
         successMsg.classList.remove('hidden');
         setTimeout(() => successMsg.classList.add('hidden'), 3500);
       } catch (err) {
-        alert('Erreur lors de la mise à jour du profil : ' + err.message);
+        console.error('Erreur profil:', err);
+        const errEl = document.getElementById('profile-error-msg');
+        if (errEl) {
+          errEl.textContent = 'Erreur lors de la mise à jour : ' + err.message;
+          errEl.classList.remove('hidden');
+          setTimeout(() => errEl.classList.add('hidden'), 4000);
+        }
       }
     });
 
