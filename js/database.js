@@ -1,6 +1,15 @@
 /**
- * LUMA — Couche d'accès aux données (DAL)
- * Centralise toutes les opérations de base de données (Firestore / Multi-base évolutif)
+ * LUMA — Couche d'accès aux données
+ * Firestore
+ *
+ * Architecture réelle utilisée :
+ *
+ * chats/{chatId}
+ * chats/{chatId}/messages/{messageId}
+ *
+ * IMPORTANT :
+ * - participants = adresses email
+ * - expediteurId = UID Firebase
  */
 
 import {
@@ -13,542 +22,1789 @@ import {
   updateDoc,
   query,
   where,
-  orderBy,
   limit,
   onSnapshot,
   serverTimestamp,
   arrayUnion,
   increment,
 } from 'firebase/firestore';
-import { db, handleFirestoreError } from './firebase-config.js';
 
-/**
- * Routeur de base de données : Permet d'étendre ultérieurement vers
- * une base de données secondaire sans impacter les services ni l'interface.
- */
+import { getAuth } from 'firebase/auth';
+
+import {
+  db,
+  handleFirestoreError
+} from './firebase-config.js';
+
+
+/* ============================================================
+   ROUTEUR FIRESTORE
+============================================================ */
+
 class DatabaseRouter {
+
   constructor() {
     this.primaryType = 'firestore';
-    this.secondaryType = null; // Prêt pour une base secondaire si nécessaire
+    this.secondaryType = null;
   }
 
   getFirestore() {
+
     if (!db) {
-      throw new Error('Firestore non initialisé. Veuillez vérifier la configuration Firebase.');
+      throw new Error(
+        'Firestore non initialisé. Vérifiez la configuration Firebase.'
+      );
     }
+
     return db;
   }
 }
 
 const router = new DatabaseRouter();
 
-export const Database = {
-  /**
-   * ==========================================
-   * 1. GESTION DES UTILISATEURS (Collection `utilisateurs`)
-   * Source de vérité existante de l'écosystème Lumesys
-   * ==========================================
-   */
 
-  /**
-   * Récupère le profil d'un utilisateur par son UID ou son email (structure Lumesys existante)
-   */
+/* ============================================================
+   UTILITAIRES
+============================================================ */
+
+/**
+ * Retourne l'utilisateur Firebase actuellement connecté.
+ */
+function getCurrentFirebaseUser() {
+
+  try {
+
+    const auth = getAuth();
+
+    return auth.currentUser || null;
+
+  } catch (error) {
+
+    console.error(
+      'Impossible de récupérer l’utilisateur Firebase :',
+      error
+    );
+
+    return null;
+  }
+}
+
+
+/**
+ * Retourne l'email de l'utilisateur connecté.
+ */
+function getCurrentUserEmail() {
+
+  const user = getCurrentFirebaseUser();
+
+  if (!user || !user.email) {
+    return null;
+  }
+
+  return user.email.toLowerCase().trim();
+}
+
+
+/**
+ * Normalise une adresse email.
+ */
+function normalizeEmail(email) {
+
+  if (!email) return '';
+
+  return String(email)
+    .toLowerCase()
+    .trim();
+}
+
+
+/**
+ * Crée un identifiant de chat déterministe.
+ *
+ * Exemple :
+ *
+ * emailA + emailB
+ *       ↓
+ * tri alphabétique
+ *       ↓
+ * emailA_emailB
+ */
+function creerChatId(emailA, emailB) {
+
+  const emails = [
+    normalizeEmail(emailA),
+    normalizeEmail(emailB)
+  ]
+    .filter(Boolean)
+    .sort();
+
+  return emails.join('_');
+}
+
+
+/* ============================================================
+   DATABASE
+============================================================ */
+
+export const Database = {
+
+
+  /* ==========================================================
+     UTILISATEUR PAR UID
+  ========================================================== */
+
   async getUtilisateurByUid(uid, email = null) {
+
     const firestore = router.getFirestore();
+
     try {
-      // 1. Chercher par email dans la collection utilisateurs (clé primaire native Lumesys)
+
+      /*
+       * Première recherche par email.
+       */
       if (email) {
-        const cleanEmail = email.toLowerCase().trim();
-        const userRefEmail = doc(firestore, 'utilisateurs', cleanEmail);
+
+        const cleanEmail = normalizeEmail(email);
+
+        const userRefEmail = doc(
+          firestore,
+          'utilisateurs',
+          cleanEmail
+        );
+
         const snapEmail = await getDoc(userRefEmail);
+
         if (snapEmail.exists()) {
-          return { id: snapEmail.id, ...snapEmail.data() };
+
+          return {
+            id: snapEmail.id,
+            ...snapEmail.data()
+          };
         }
       }
 
-      // 2. Chercher par document UID
+
+      /*
+       * Deuxième recherche par UID.
+       */
       if (uid) {
-        const userRefUid = doc(firestore, 'utilisateurs', uid);
+
+        const userRefUid = doc(
+          firestore,
+          'utilisateurs',
+          uid
+        );
+
         const snapUid = await getDoc(userRefUid);
+
         if (snapUid.exists()) {
-          return { id: snapUid.id, ...snapUid.data() };
+
+          return {
+            id: snapUid.id,
+            ...snapUid.data()
+          };
         }
       }
 
       return null;
+
     } catch (error) {
-      handleFirestoreError(error, 'get', `utilisateurs/${email || uid}`);
+
+      handleFirestoreError(
+        error,
+        'get',
+        `utilisateurs/${email || uid}`
+      );
+
+      return null;
     }
   },
 
-  /**
-   * Recherche un utilisateur par email (utile pour la liaison de comptes préexistants dans Lumesys)
-   */
+
+  /* ==========================================================
+     UTILISATEUR PAR EMAIL
+  ========================================================== */
+
   async getUtilisateurByEmail(email) {
+
     if (!email) return null;
-    const cleanEmail = email.toLowerCase().trim();
+
+    const cleanEmail = normalizeEmail(email);
+
     const firestore = router.getFirestore();
+
     try {
-      // Vérifier d'abord si le document porte directement le nom de l'email (format Lumesys)
-      const directDoc = await getDoc(doc(firestore, 'utilisateurs', cleanEmail));
+
+      /*
+       * Cas principal :
+       * document ID = email
+       */
+      const directDoc = await getDoc(
+        doc(
+          firestore,
+          'utilisateurs',
+          cleanEmail
+        )
+      );
+
       if (directDoc.exists()) {
-        return { id: directDoc.id, ...directDoc.data() };
+
+        return {
+          id: directDoc.id,
+          ...directDoc.data()
+        };
       }
 
+
+      /*
+       * Compatibilité avec d'anciens documents.
+       */
       const q = query(
-        collection(firestore, 'utilisateurs'),
-        where('email', '==', cleanEmail),
+        collection(
+          firestore,
+          'utilisateurs'
+        ),
+        where(
+          'email',
+          '==',
+          cleanEmail
+        ),
         limit(1)
       );
+
       const querySnapshot = await getDocs(q);
+
       if (!querySnapshot.empty) {
+
         const docSnap = querySnapshot.docs[0];
-        return { id: docSnap.id, ...docSnap.data() };
+
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
       }
+
       return null;
+
     } catch (error) {
-      handleFirestoreError(error, 'list', 'utilisateurs');
+
+      handleFirestoreError(
+        error,
+        'list',
+        'utilisateurs'
+      );
+
+      return null;
     }
   },
 
-  /**
-   * Enregistre ou met à jour un profil dans la collection `utilisateurs` et synchronise avec `public_profiles`.
-   * Préserve TOUS les champs préexistants de l'écosystème Lumesys (compatibilité ascendante absolue).
-   */
+
+  /* ==========================================================
+     ENREGISTRER / METTRE À JOUR UTILISATEUR
+  ========================================================== */
+
   async enregistrerOuMettreAJourUtilisateur(userData) {
-    if (!userData || (!userData.uid && !userData.email)) {
-      throw new Error('Identifiant utilisateur (UID ou Email) manquant');
+
+    if (
+      !userData ||
+      (!userData.uid && !userData.email)
+    ) {
+
+      throw new Error(
+        'Identifiant utilisateur (UID ou Email) manquant'
+      );
     }
+
     const firestore = router.getFirestore();
-    const userEmail = (userData.email || '').toLowerCase().trim();
-    const docKey = userEmail || userData.uid;
-    const userRef = doc(firestore, 'utilisateurs', docKey);
+
+    const userEmail = normalizeEmail(
+      userData.email
+    );
+
+    const docKey =
+      userEmail ||
+      userData.uid;
+
+    const userRef = doc(
+      firestore,
+      'utilisateurs',
+      docKey
+    );
 
     try {
-      // Récupérer le document existant pour ne rien écraser
+
       const snapshot = await getDoc(userRef);
-      const existingData = snapshot.exists() ? snapshot.data() : {};
+
+      const existingData =
+        snapshot.exists()
+          ? snapshot.data()
+          : {};
 
       const dataToSave = {
+
         ...existingData,
-        uid: userData.uid || existingData.uid || '',
-        nom: userData.nom || existingData.nom || 'Utilisateur Lumesys',
-        email: userEmail || existingData.email || '',
-        photo: userData.photoUrl || userData.photo || existingData.photo || '',
-        photoUrl: userData.photoUrl || userData.photo || existingData.photoUrl || '',
-        statut: userData.statut || existingData.statut || 'online',
-        derniereConnexion: serverTimestamp(),
-        dernierVu: serverTimestamp(),
+
+        uid:
+          userData.uid ||
+          existingData.uid ||
+          '',
+
+        nom:
+          userData.nom ||
+          existingData.nom ||
+          'Utilisateur Lumesys',
+
+        email:
+          userEmail ||
+          existingData.email ||
+          '',
+
+        photo:
+          userData.photoUrl ||
+          userData.photo ||
+          existingData.photo ||
+          '',
+
+        photoUrl:
+          userData.photoUrl ||
+          userData.photo ||
+          existingData.photoUrl ||
+          '',
+
+        statut:
+          userData.statut ||
+          existingData.statut ||
+          'online',
+
+        derniereConnexion:
+          serverTimestamp(),
+
+        dernierVu:
+          serverTimestamp()
       };
 
+
       if (userData.bio !== undefined) {
-        dataToSave.bio = userData.bio;
-      }
-      if (userData.numero || existingData.numero) {
-        dataToSave.numero = userData.numero || existingData.numero;
-      }
-      if (userData.sexe || existingData.sexe) {
-        dataToSave.sexe = userData.sexe || existingData.sexe;
+
+        dataToSave.bio =
+          userData.bio;
       }
 
-      await setDoc(userRef, dataToSave, { merge: true });
 
-      // Synchronisation avec public_profiles (utilisé par Lumesys pour la découverte dans la messagerie)
+      if (
+        userData.numero ||
+        existingData.numero
+      ) {
+
+        dataToSave.numero =
+          userData.numero ||
+          existingData.numero;
+      }
+
+
+      if (
+        userData.sexe ||
+        existingData.sexe
+      ) {
+
+        dataToSave.sexe =
+          userData.sexe ||
+          existingData.sexe;
+      }
+
+
+      await setDoc(
+        userRef,
+        dataToSave,
+        { merge: true }
+      );
+
+
+      /*
+       * Synchronisation du profil public.
+       *
+       * Cette opération reste facultative.
+       */
       if (userEmail) {
+
         try {
-          const publicProfileRef = doc(firestore, 'public_profiles', userEmail);
-          const splitName = (dataToSave.nom || '').trim().split(/\s+/);
-          await setDoc(publicProfileRef, {
-            prenom: splitName[0] || '',
-            nom: splitName.slice(1).join(' ') || splitName[0] || '',
-            sexe: dataToSave.sexe || '',
-            photo: dataToSave.photo || dataToSave.photoUrl || '',
-            telephone: dataToSave.numero || '',
-            email: userEmail,
-            updatedAt: serverTimestamp(),
-          }, { merge: true });
+
+          const publicProfileRef =
+            doc(
+              firestore,
+              'public_profiles',
+              userEmail
+            );
+
+          const splitName =
+            (
+              dataToSave.nom ||
+              ''
+            )
+              .trim()
+              .split(/\s+/);
+
+
+          await setDoc(
+            publicProfileRef,
+            {
+
+              prenom:
+                splitName[0] || '',
+
+              nom:
+                splitName
+                  .slice(1)
+                  .join(' ') ||
+                splitName[0] ||
+                '',
+
+              sexe:
+                dataToSave.sexe || '',
+
+              photo:
+                dataToSave.photo ||
+                dataToSave.photoUrl ||
+                '',
+
+              telephone:
+                dataToSave.numero ||
+                '',
+
+              email:
+                userEmail,
+
+              updatedAt:
+                serverTimestamp()
+            },
+
+            { merge: true }
+          );
+
         } catch (pubErr) {
-          console.warn('Note: Synchronisation public_profiles optionnelle:', pubErr);
+
+          console.warn(
+            'Note : synchronisation public_profiles facultative :',
+            pubErr
+          );
         }
       }
 
-      return { id: docKey, ...dataToSave };
+
+      return {
+        id: docKey,
+        ...dataToSave
+      };
+
     } catch (error) {
-      handleFirestoreError(error, 'write', `utilisateurs/${docKey}`);
+
+      handleFirestoreError(
+        error,
+        'write',
+        `utilisateurs/${docKey}`
+      );
+
+      return null;
     }
   },
 
-  /**
-   * Recherche des utilisateurs Lumesys dans `public_profiles` et `utilisateurs`.
-   */
-  async rechercherUtilisateurs(terme, currentUserId, limitCount = 25) {
-    if (!terme || terme.trim().length === 0) {
-      return this.listerUtilisateursRecents(currentUserId, limitCount);
+
+  /* ==========================================================
+     RECHERCHE UTILISATEURS
+  ========================================================== */
+
+  async rechercherUtilisateurs(
+    terme,
+    currentUserId,
+    limitCount = 25
+  ) {
+
+    if (
+      !terme ||
+      terme.trim().length === 0
+    ) {
+
+      return this.listerUtilisateursRecents(
+        currentUserId,
+        limitCount
+      );
     }
-    const firestore = router.getFirestore();
-    const searchVal = terme.trim();
-    const searchValLower = searchVal.toLowerCase();
+
+    const firestore =
+      router.getFirestore();
+
+    const searchVal =
+      terme.trim();
+
+    const searchValLower =
+      searchVal.toLowerCase();
+
+    const currentEmail =
+      getCurrentUserEmail();
+
 
     try {
-      // Recherche 1 : dans public_profiles
+
       const qPublic = query(
-        collection(firestore, 'public_profiles'),
+        collection(
+          firestore,
+          'public_profiles'
+        ),
         limit(limitCount)
       );
 
-      // Recherche 2 : dans utilisateurs
       const qUsers = query(
-        collection(firestore, 'utilisateurs'),
+        collection(
+          firestore,
+          'utilisateurs'
+        ),
         limit(limitCount)
       );
 
-      const [snapPublic, snapUsers] = await Promise.all([
-        getDocs(qPublic).catch(() => ({ docs: [] })),
-        getDocs(qUsers).catch(() => ({ docs: [] })),
+
+      const [
+        snapPublic,
+        snapUsers
+      ] = await Promise.all([
+
+        getDocs(qPublic)
+          .catch(() => ({ docs: [] })),
+
+        getDocs(qUsers)
+          .catch(() => ({ docs: [] }))
       ]);
 
-      const map = new Map();
+
+      const map =
+        new Map();
+
+
+      /* ------------------------------------------------------
+         PROFILS PUBLICS
+      ------------------------------------------------------ */
 
       snapPublic.docs.forEach((d) => {
-        const data = d.data();
-        const email = d.id.includes('@') ? d.id : (data.email || '');
-        const fullName = `${data.prenom || ''} ${data.nom || ''}`.trim() || email;
+
+        const data =
+          d.data();
+
+        const email =
+          normalizeEmail(
+            d.id.includes('@')
+              ? d.id
+              : data.email || ''
+          );
+
+        const fullName =
+          `${data.prenom || ''} ${data.nom || ''}`
+            .trim() ||
+          email;
+
+
         if (
-          fullName.toLowerCase().includes(searchValLower) ||
-          email.toLowerCase().includes(searchValLower)
+
+          (
+            fullName
+              .toLowerCase()
+              .includes(searchValLower)
+          )
+
+          ||
+
+          (
+            email
+              .toLowerCase()
+              .includes(searchValLower)
+          )
+
         ) {
-          if (email !== currentUserId && data.uid !== currentUserId) {
-            map.set(email || d.id, {
-              id: d.id,
-              uid: data.uid || d.id,
-              nom: fullName,
-              email: email,
-              photoUrl: data.photo || '',
-              statut: 'online',
-            });
+
+          /*
+           * Ne pas afficher l'utilisateur connecté.
+           */
+          if (
+            email &&
+            email !== currentEmail
+          ) {
+
+            map.set(
+              email,
+              {
+
+                id: d.id,
+
+                uid:
+                  data.uid ||
+                  '',
+
+                nom:
+                  fullName,
+
+                email:
+                  email,
+
+                photoUrl:
+                  data.photo ||
+                  '',
+
+                statut:
+                  'online'
+              }
+            );
           }
         }
       });
 
+
+      /* ------------------------------------------------------
+         UTILISATEURS
+      ------------------------------------------------------ */
+
       snapUsers.docs.forEach((d) => {
-        const data = d.data();
-        const email = data.email || (d.id.includes('@') ? d.id : '');
-        const name = data.nom || email || 'Utilisateur';
+
+        const data =
+          d.data();
+
+        const email =
+          normalizeEmail(
+            data.email ||
+            (
+              d.id.includes('@')
+                ? d.id
+                : ''
+            )
+          );
+
+        const name =
+          data.nom ||
+          email ||
+          'Utilisateur';
+
+
         if (
-          name.toLowerCase().includes(searchValLower) ||
-          email.toLowerCase().includes(searchValLower)
+
+          (
+            name
+              .toLowerCase()
+              .includes(searchValLower)
+          )
+
+          ||
+
+          (
+            email
+              .toLowerCase()
+              .includes(searchValLower)
+          )
+
         ) {
-          if (email !== currentUserId && d.id !== currentUserId && data.uid !== currentUserId) {
-            const key = email || d.id;
-            if (!map.has(key)) {
-              map.set(key, {
-                id: d.id,
-                uid: data.uid || d.id,
-                nom: name,
-                email: email,
-                photoUrl: data.photoUrl || data.photo || '',
-                statut: data.statut || 'online',
-              });
+
+          if (
+            email &&
+            email !== currentEmail
+          ) {
+
+            if (!map.has(email)) {
+
+              map.set(
+                email,
+                {
+
+                  id: d.id,
+
+                  uid:
+                    data.uid ||
+                    '',
+
+                  nom:
+                    name,
+
+                  email:
+                    email,
+
+                  photoUrl:
+                    data.photoUrl ||
+                    data.photo ||
+                    '',
+
+                  statut:
+                    data.statut ||
+                    'online'
+                }
+              );
             }
           }
         }
       });
 
-      return Array.from(map.values());
+
+      return Array.from(
+        map.values()
+      );
+
     } catch (error) {
-      handleFirestoreError(error, 'list', 'utilisateurs');
+
+      handleFirestoreError(
+        error,
+        'list',
+        'utilisateurs'
+      );
+
+      return [];
     }
   },
 
-  /**
-   * Liste les utilisateurs récents pour démarrer une conversation
-   */
-  async listerUtilisateursRecents(currentUserId, limitCount = 25) {
-    const firestore = router.getFirestore();
+
+  /* ==========================================================
+     UTILISATEURS RECENTS
+  ========================================================== */
+
+  async listerUtilisateursRecents(
+    currentUserId,
+    limitCount = 25
+  ) {
+
+    const firestore =
+      router.getFirestore();
+
+    const currentEmail =
+      getCurrentUserEmail();
+
+
     try {
-      const [snapPublic, snapUsers] = await Promise.all([
-        getDocs(query(collection(firestore, 'public_profiles'), limit(limitCount))).catch(() => ({ docs: [] })),
-        getDocs(query(collection(firestore, 'utilisateurs'), limit(limitCount))).catch(() => ({ docs: [] })),
+
+      const [
+        snapPublic,
+        snapUsers
+      ] = await Promise.all([
+
+        getDocs(
+          query(
+            collection(
+              firestore,
+              'public_profiles'
+            ),
+            limit(limitCount)
+          )
+        )
+        .catch(() => ({ docs: [] })),
+
+        getDocs(
+          query(
+            collection(
+              firestore,
+              'utilisateurs'
+            ),
+            limit(limitCount)
+          )
+        )
+        .catch(() => ({ docs: [] }))
       ]);
 
-      const map = new Map();
+
+      const map =
+        new Map();
+
+
+      /* ------------------------------------------------------
+         PROFILS PUBLICS
+      ------------------------------------------------------ */
 
       snapPublic.docs.forEach((d) => {
-        const data = d.data();
-        const email = d.id.includes('@') ? d.id : (data.email || '');
-        const fullName = `${data.prenom || ''} ${data.nom || ''}`.trim() || email;
-        if (email !== currentUserId && data.uid !== currentUserId) {
-          map.set(email || d.id, {
-            id: d.id,
-            uid: data.uid || d.id,
-            nom: fullName,
-            email: email,
-            photoUrl: data.photo || '',
-            statut: 'online',
-          });
+
+        const data =
+          d.data();
+
+        const email =
+          normalizeEmail(
+            d.id.includes('@')
+              ? d.id
+              : data.email || ''
+          );
+
+        const fullName =
+          `${data.prenom || ''} ${data.nom || ''}`
+            .trim() ||
+          email;
+
+
+        if (
+          email &&
+          email !== currentEmail
+        ) {
+
+          map.set(
+            email,
+            {
+
+              id: d.id,
+
+              uid:
+                data.uid ||
+                '',
+
+              nom:
+                fullName,
+
+              email:
+                email,
+
+              photoUrl:
+                data.photo ||
+                '',
+
+              statut:
+                'online'
+            }
+          );
         }
       });
+
+
+      /* ------------------------------------------------------
+         UTILISATEURS
+      ------------------------------------------------------ */
 
       snapUsers.docs.forEach((d) => {
-        const data = d.data();
-        const email = data.email || (d.id.includes('@') ? d.id : '');
-        const name = data.nom || email || 'Utilisateur';
-        const key = email || d.id;
-        if (email !== currentUserId && d.id !== currentUserId && data.uid !== currentUserId && !map.has(key)) {
-          map.set(key, {
-            id: d.id,
-            uid: data.uid || d.id,
-            nom: name,
-            email: email,
-            photoUrl: data.photoUrl || data.photo || '',
-            statut: data.statut || 'online',
-          });
+
+        const data =
+          d.data();
+
+        const email =
+          normalizeEmail(
+            data.email ||
+            (
+              d.id.includes('@')
+                ? d.id
+                : ''
+            )
+          );
+
+        const name =
+          data.nom ||
+          email ||
+          'Utilisateur';
+
+
+        if (
+          email &&
+          email !== currentEmail &&
+          !map.has(email)
+        ) {
+
+          map.set(
+            email,
+            {
+
+              id: d.id,
+
+              uid:
+                data.uid ||
+                '',
+
+              nom:
+                name,
+
+              email:
+                email,
+
+              photoUrl:
+                data.photoUrl ||
+                data.photo ||
+                '',
+
+              statut:
+                data.statut ||
+                'online'
+            }
+          );
         }
       });
 
-      return Array.from(map.values());
+
+      return Array.from(
+        map.values()
+      );
+
     } catch (error) {
-      handleFirestoreError(error, 'list', 'utilisateurs');
+
+      handleFirestoreError(
+        error,
+        'list',
+        'utilisateurs'
+      );
+
+      return [];
     }
   },
 
-  /**
-   * ==========================================
-   * 2. GESTION DES CONVERSATIONS (Collection `conversations`)
-   * ==========================================
-   */
 
-  /**
-   * Écoute en temps réel les conversations d'un utilisateur
-   */
-  ecouterConversations(userId, onUpdate, onError) {
-    if (!userId) return () => {};
-    const firestore = router.getFirestore();
+  /* ==========================================================
+     ÉCOUTER LES CHATS EN TEMPS RÉEL
+     
+     IMPORTANT :
+     participants contient les EMAILS.
+  ========================================================== */
 
-    const q = query(
-      collection(firestore, 'conversations'),
-      where('participants', 'array-contains', userId)
-    );
+  ecouterConversations(
+    userId,
+    onUpdate,
+    onError
+  ) {
+
+    const currentEmail =
+      getCurrentUserEmail();
+
+
+    if (!currentEmail) {
+
+      console.error(
+        'Impossible d’écouter les chats : email utilisateur absent.'
+      );
+
+      return () => {};
+    }
+
+
+    const firestore =
+      router.getFirestore();
+
+
+    /*
+     * NOUVELLE REQUÊTE :
+     *
+     * chats
+     * participants array-contains email
+     */
+    const q =
+      query(
+        collection(
+          firestore,
+          'chats'
+        ),
+        where(
+          'participants',
+          'array-contains',
+          currentEmail
+        )
+      );
+
 
     return onSnapshot(
+
       q,
+
       (snapshot) => {
-        const conversations = [];
+
+        const conversations =
+          [];
+
+
         snapshot.forEach((d) => {
-          conversations.push({ id: d.id, ...d.data() });
+
+          conversations.push({
+            id: d.id,
+            ...d.data()
+          });
         });
 
-        // Tri côté client par date de dernière activité
-        conversations.sort((a, b) => {
-          const dateA = a.misAJourLe?.toMillis ? a.misAJourLe.toMillis() : (a.creeLe?.toMillis ? a.creeLe.toMillis() : 0);
-          const dateB = b.misAJourLe?.toMillis ? b.misAJourLe.toMillis() : (b.creeLe?.toMillis ? b.creeLe.toMillis() : 0);
-          return dateB - dateA;
-        });
 
-        onUpdate(conversations);
+        /*
+         * Tri côté JavaScript.
+         */
+        conversations.sort(
+          (a, b) => {
+
+            const dateA =
+              a.updatedAt?.toMillis
+                ? a.updatedAt.toMillis()
+                : (
+                    a.createdAt?.toMillis
+                      ? a.createdAt.toMillis()
+                      : 0
+                  );
+
+            const dateB =
+              b.updatedAt?.toMillis
+                ? b.updatedAt.toMillis()
+                : (
+                    b.createdAt?.toMillis
+                      ? b.createdAt.toMillis()
+                      : 0
+                  );
+
+            return dateB - dateA;
+          }
+        );
+
+
+        onUpdate(
+          conversations
+        );
       },
+
+
       (error) => {
-        console.error('Erreur écoute conversations:', error);
-        if (onError) onError(error);
-        handleFirestoreError(error, 'get', 'conversations');
+
+        console.error(
+          'Erreur écoute chats :',
+          error
+        );
+
+        if (onError) {
+          onError(error);
+        }
+
+        handleFirestoreError(
+          error,
+          'list',
+          'chats'
+        );
       }
     );
   },
 
-  /**
-   * Recherche une conversation existante entre deux utilisateurs (1 à 1)
-   */
-  async trouverConversationDirecte(userAId, userBId) {
-    const firestore = router.getFirestore();
+
+  /* ==========================================================
+     TROUVER UNE CONVERSATION DIRECTE
+  ========================================================== */
+
+  async trouverConversationDirecte(
+    userAEmail,
+    userBEmail
+  ) {
+
+    const emailA =
+      normalizeEmail(userAEmail);
+
+    const emailB =
+      normalizeEmail(userBEmail);
+
+
+    if (
+      !emailA ||
+      !emailB
+    ) {
+
+      return null;
+    }
+
+
+    const firestore =
+      router.getFirestore();
+
+
     try {
-      const q = query(
-        collection(firestore, 'conversations'),
-        where('participants', 'array-contains', userAId)
-      );
-      const snapshot = await getDocs(q);
-      for (const d of snapshot.docs) {
-        const data = d.data();
-        if (data.participants && data.participants.includes(userBId) && data.participants.length === 2) {
-          return { id: d.id, ...data };
+
+      /*
+       * On cherche tous les chats de A.
+       */
+      const q =
+        query(
+          collection(
+            firestore,
+            'chats'
+          ),
+          where(
+            'participants',
+            'array-contains',
+            emailA
+          )
+        );
+
+
+      const snapshot =
+        await getDocs(q);
+
+
+      /*
+       * On recherche le chat contenant également B.
+       */
+      for (
+        const d of snapshot.docs
+      ) {
+
+        const data =
+          d.data();
+
+        const participants =
+          Array.isArray(
+            data.participants
+          )
+            ? data.participants.map(
+                normalizeEmail
+              )
+            : [];
+
+
+        if (
+
+          participants.length === 2 &&
+
+          participants.includes(emailA) &&
+
+          participants.includes(emailB)
+
+        ) {
+
+          return {
+            id: d.id,
+            ...data
+          };
         }
       }
+
+
       return null;
+
     } catch (error) {
-      handleFirestoreError(error, 'list', 'conversations');
+
+      handleFirestoreError(
+        error,
+        'list',
+        'chats'
+      );
+
+      return null;
     }
   },
 
-  /**
-   * Crée ou retourne la conversation directe entre deux utilisateurs
-   */
-  async creerOuRecupererConversation(userA, userB) {
-    const existante = await this.trouverConversationDirecte(userA.uid, userB.uid);
+
+  /* ==========================================================
+     CRÉER OU RÉCUPÉRER UN CHAT
+  ========================================================== */
+
+  async creerOuRecupererConversation(
+    userA,
+    userB
+  ) {
+
+    /*
+     * On utilise les emails pour le système de chats.
+     */
+    const emailA =
+      normalizeEmail(
+        userA.email
+      );
+
+    const emailB =
+      normalizeEmail(
+        userB.email
+      );
+
+
+    if (
+      !emailA ||
+      !emailB
+    ) {
+
+      throw new Error(
+        'Les deux utilisateurs doivent posséder une adresse email.'
+      );
+    }
+
+
+    /*
+     * Vérifier si le chat existe déjà.
+     */
+    const existante =
+      await this.trouverConversationDirecte(
+        emailA,
+        emailB
+      );
+
+
     if (existante) {
+
+      /*
+       * Ajouter éventuellement les informations
+       * manquantes pour l'interface.
+       */
+      if (!existante.participantDetails) {
+
+        existante.participantDetails = {
+
+          [emailA]: {
+
+            nom:
+              userA.nom ||
+              'Utilisateur',
+
+            email:
+              emailA,
+
+            photoUrl:
+              userA.photoUrl ||
+              ''
+          },
+
+          [emailB]: {
+
+            nom:
+              userB.nom ||
+              'Utilisateur',
+
+            email:
+              emailB,
+
+            photoUrl:
+              userB.photoUrl ||
+              ''
+          }
+        };
+      }
+
+
       return existante;
     }
 
-    const firestore = router.getFirestore();
-    const convId = [userA.uid, userB.uid].sort().join('_');
-    const convRef = doc(firestore, 'conversations', convId);
 
-    const nouvelleConv = {
-      participants: [userA.uid, userB.uid],
+    const firestore =
+      router.getFirestore();
+
+
+    /*
+     * ID déterministe.
+     *
+     * Exemple :
+     * emailA_emailB
+     */
+    const chatId =
+      creerChatId(
+        emailA,
+        emailB
+      );
+
+
+    const chatRef =
+      doc(
+        firestore,
+        'chats',
+        chatId
+      );
+
+
+    const nouveauChat = {
+
+      participants: [
+        emailA,
+        emailB
+      ],
+
       participantDetails: {
-        [userA.uid]: {
-          nom: userA.nom || 'Utilisateur',
-          email: userA.email || '',
-          photoUrl: userA.photoUrl || '',
+
+        [emailA]: {
+
+          nom:
+            userA.nom ||
+            'Utilisateur',
+
+          email:
+            emailA,
+
+          photoUrl:
+            userA.photoUrl ||
+            ''
         },
-        [userB.uid]: {
-          nom: userB.nom || 'Utilisateur',
-          email: userB.email || '',
-          photoUrl: userB.photoUrl || '',
-        },
+
+        [emailB]: {
+
+          nom:
+            userB.nom ||
+            'Utilisateur',
+
+          email:
+            emailB,
+
+          photoUrl:
+            userB.photoUrl ||
+            ''
+        }
       },
-      dernierMessage: '',
-      dernierMessageDate: null,
-      dernierMessageExpediteur: '',
+
+      dernierMessage:
+        '',
+
+      dernierMessageDate:
+        null,
+
+      dernierMessageExpediteur:
+        '',
+
       nonLus: {
-        [userA.uid]: 0,
-        [userB.uid]: 0,
+
+        [emailA]: 0,
+
+        [emailB]: 0
       },
-      creeLe: serverTimestamp(),
-      misAJourLe: serverTimestamp(),
+
+      createdAt:
+        serverTimestamp(),
+
+      updatedAt:
+        serverTimestamp()
     };
 
+
     try {
-      await setDoc(convRef, nouvelleConv, { merge: true });
-      return { id: convId, ...nouvelleConv };
+
+      await setDoc(
+        chatRef,
+        nouveauChat,
+        { merge: true }
+      );
+
+
+      return {
+        id: chatId,
+        ...nouveauChat
+      };
+
     } catch (error) {
-      handleFirestoreError(error, 'write', `conversations/${convId}`);
+
+      handleFirestoreError(
+        error,
+        'write',
+        `chats/${chatId}`
+      );
+
+      return null;
     }
   },
 
-  /**
-   * Marque une conversation comme lue pour un utilisateur
-   */
-  async marquerConversationCommeLue(conversationId, userId) {
-    if (!conversationId || !userId) return;
-    const firestore = router.getFirestore();
-    const convRef = doc(firestore, 'conversations', conversationId);
+
+  /* ==========================================================
+     MARQUER UN CHAT COMME LU
+  ========================================================== */
+
+  async marquerConversationCommeLue(
+    conversationId,
+    userId
+  ) {
+
+    if (!conversationId) {
+      return;
+    }
+
+
+    const email =
+      getCurrentUserEmail();
+
+
+    if (!email) {
+      return;
+    }
+
+
+    const firestore =
+      router.getFirestore();
+
+
+    const chatRef =
+      doc(
+        firestore,
+        'chats',
+        conversationId
+      );
+
 
     try {
-      await updateDoc(convRef, {
-        [`nonLus.${userId}`]: 0,
-      });
+
+      await updateDoc(
+        chatRef,
+        {
+          [`nonLus.${email}`]: 0
+        }
+      );
+
     } catch (error) {
-      console.warn('Erreur mise à jour statut de lecture conversation:', error);
+
+      console.warn(
+        'Erreur mise à jour statut de lecture :',
+        error
+      );
     }
   },
 
-  /**
-   * ==========================================
-   * 3. GESTION DES MESSAGES TEMPS RÉEL (Sous-collection `conversations/{id}/messages`)
-   * ==========================================
-   */
 
-  /**
-   * Écoute les messages d'une conversation en temps réel
-   */
-  ecouterMessages(conversationId, onUpdate, onError) {
-    if (!conversationId) return () => {};
-    const firestore = router.getFirestore();
+  /* ==========================================================
+     ÉCOUTER LES MESSAGES
+  ========================================================== */
 
-    const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
-    const q = query(messagesRef, orderBy('dateEnvoi', 'asc'), limit(150));
+  ecouterMessages(
+    conversationId,
+    onUpdate,
+    onError
+  ) {
+
+    if (!conversationId) {
+      return () => {};
+    }
+
+
+    const firestore =
+      router.getFirestore();
+
+
+    const messagesRef =
+      collection(
+        firestore,
+        'chats',
+        conversationId,
+        'messages'
+      );
+
+
+    const q =
+      query(
+        messagesRef,
+        limit(150)
+      );
+
 
     return onSnapshot(
+
       q,
+
       (snapshot) => {
-        const messages = [];
+
+        const messages =
+          [];
+
+
         snapshot.forEach((d) => {
-          messages.push({ id: d.id, ...d.data() });
+
+          messages.push({
+            id: d.id,
+            ...d.data()
+          });
         });
-        onUpdate(messages);
+
+
+        /*
+         * Tri par date d'envoi.
+         */
+        messages.sort(
+          (a, b) => {
+
+            const dateA =
+              a.dateEnvoi?.toMillis
+                ? a.dateEnvoi.toMillis()
+                : 0;
+
+            const dateB =
+              b.dateEnvoi?.toMillis
+                ? b.dateEnvoi.toMillis()
+                : 0;
+
+            return dateA - dateB;
+          }
+        );
+
+
+        onUpdate(
+          messages
+        );
       },
+
+
       (error) => {
-        console.error('Erreur écoute messages:', error);
-        if (onError) onError(error);
-        handleFirestoreError(error, 'get', `conversations/${conversationId}/messages`);
+
+        console.error(
+          'Erreur écoute messages :',
+          error
+        );
+
+        if (onError) {
+          onError(error);
+        }
+
+        handleFirestoreError(
+          error,
+          'get',
+          `chats/${conversationId}/messages`
+        );
       }
     );
   },
 
-  /**
-   * Envoie un nouveau message dans une conversation
-   */
-  async envoyerMessage(conversationId, expediteur, contenu, pieceJointe = null) {
-    if (!conversationId || !expediteur || !contenu.trim()) {
-      throw new Error('Paramètres de message invalides');
+
+  /* ==========================================================
+     ENVOYER UN MESSAGE
+  ========================================================== */
+
+  async envoyerMessage(
+    conversationId,
+    expediteur,
+    contenu,
+    pieceJointe = null
+  ) {
+
+    if (
+      !conversationId ||
+      !expediteur ||
+      !contenu ||
+      !contenu.trim()
+    ) {
+
+      throw new Error(
+        'Paramètres de message invalides'
+      );
     }
 
-    const firestore = router.getFirestore();
-    const convRef = doc(firestore, 'conversations', conversationId);
-    const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
 
-    const cleanContenu = contenu.trim().slice(0, 5000);
+    const firestore =
+      router.getFirestore();
+
+
+    const convRef =
+      doc(
+        firestore,
+        'chats',
+        conversationId
+      );
+
+
+    const messagesRef =
+      collection(
+        firestore,
+        'chats',
+        conversationId,
+        'messages'
+      );
+
+
+    const cleanContenu =
+      contenu
+        .trim()
+        .slice(0, 5000);
+
 
     const messagePayload = {
-      conversationId,
-      expediteurId: expediteur.uid,
-      expediteurNom: expediteur.nom || 'Utilisateur',
-      contenu: cleanContenu,
-      dateEnvoi: serverTimestamp(),
-      luPar: [expediteur.uid],
+
+      conversationId:
+
+        conversationId,
+
+      /*
+       * IMPORTANT :
+       * Les messages utilisent toujours le UID Firebase
+       * pour identifier l'expéditeur.
+       */
+      expediteurId:
+        expediteur.uid,
+
+      expediteurNom:
+        expediteur.nom ||
+        'Utilisateur',
+
+      contenu:
+        cleanContenu,
+
+      dateEnvoi:
+        serverTimestamp(),
+
+      luPar: [
+        expediteur.uid
+      ]
     };
 
+
     if (pieceJointe) {
-      messagePayload.pieceJointe = pieceJointe;
+
+      messagePayload.pieceJointe =
+        pieceJointe;
     }
+
 
     try {
-      // 1. Ajouter le message
-      const docAdded = await addDoc(messagesRef, messagePayload);
 
-      // 2. Mettre à jour la conversation parente (dernier message, horodatage, compteur non lus)
-      const convSnap = await getDoc(convRef);
+      /*
+       * Ajouter le message.
+       */
+      const docAdded =
+        await addDoc(
+          messagesRef,
+          messagePayload
+        );
+
+
+      /*
+       * Récupérer le chat.
+       */
+      const convSnap =
+        await getDoc(
+          convRef
+        );
+
+
       if (convSnap.exists()) {
-        const convData = convSnap.data();
+
+        const convData =
+          convSnap.data();
+
+
         const updatePayload = {
-          dernierMessage: cleanContenu,
-          dernierMessageDate: serverTimestamp(),
-          dernierMessageExpediteur: expediteur.uid,
-          misAJourLe: serverTimestamp(),
+
+          dernierMessage:
+            cleanContenu,
+
+          dernierMessageDate:
+            serverTimestamp(),
+
+          dernierMessageExpediteur:
+            expediteur.uid,
+
+          updatedAt:
+            serverTimestamp()
         };
 
-        // Incrémenter le compteur des autres participants
-        if (convData.participants && Array.isArray(convData.participants)) {
-          convData.participants.forEach((pId) => {
-            if (pId !== expediteur.uid) {
-              updatePayload[`nonLus.${pId}`] = increment(1);
+
+        /*
+         * Les non-lus sont maintenant indexés
+         * par EMAIL.
+         */
+        if (
+          Array.isArray(
+            convData.participants
+          )
+        ) {
+
+          const expediteurEmail =
+            normalizeEmail(
+              expediteur.email
+            );
+
+
+          convData.participants.forEach(
+            (participantEmail) => {
+
+              const email =
+                normalizeEmail(
+                  participantEmail
+                );
+
+
+              if (
+                email &&
+                email !== expediteurEmail
+              ) {
+
+                updatePayload[
+                  `nonLus.${email}`
+                ] =
+                  increment(1);
+              }
             }
-          });
+          );
         }
 
-        await updateDoc(convRef, updatePayload);
+
+        await updateDoc(
+          convRef,
+          updatePayload
+        );
       }
 
-      return { id: docAdded.id, ...messagePayload };
+
+      return {
+        id:
+          docAdded.id,
+
+        ...messagePayload
+      };
+
     } catch (error) {
-      handleFirestoreError(error, 'write', `conversations/${conversationId}/messages`);
+
+      handleFirestoreError(
+        error,
+        'write',
+        `chats/${conversationId}/messages`
+      );
+
+      return null;
     }
   },
 
-  /**
-   * Marque des messages comme lus par l'utilisateur courant
-   */
-  async marquerMessagesCommeLus(conversationId, userId, messageIds) {
-    if (!conversationId || !userId || !messageIds || messageIds.length === 0) return;
-    const firestore = router.getFirestore();
 
-    const promises = messageIds.map((msgId) => {
-      const msgRef = doc(firestore, 'conversations', conversationId, 'messages', msgId);
-      return updateDoc(msgRef, {
-        luPar: arrayUnion(userId),
-      }).catch((e) => console.warn('Impossible de marquer message lu:', msgId, e));
-    });
+  /* ==========================================================
+     MARQUER LES MESSAGES COMME LUS
+  ========================================================== */
 
-    await Promise.all(promises);
-    await this.marquerConversationCommeLue(conversationId, userId);
-  },
+  async marquerMessagesCommeLus(
+    conversationId,
+    userId,
+    messageIds
+  ) {
+
+    if (
+      !conversationId ||
+      !messageIds ||
+      messageIds.length === 0
+    ) {
+
+      return;
+    }
+
+
+    const firestore =
+      router.getFirestore();
+
+
+    const currentUser =
+      getCurrentFirebaseUser();
+
+
+    if (!currentUser) {
+      return;
+    }
+
+
+    const promises =
+      messageIds.map(
+        (msgId) => {
+
+          const msgRef =
+            doc(
+              firestore,
+              'chats',
+              conversationId,
+              'messages',
+              msgId
+            );
+
+
+          return updateDoc(
+            msgRef,
+            {
+              luPar:
+                arrayUnion(
+                  currentUser.uid
+                )
+            }
+          )
+          .catch(
+            (error) => {
+
+              console.warn(
+                'Impossible de marquer le message comme lu :',
+                msgId,
+                error
+              );
+            }
+          );
+        }
+      );
+
+
+    await Promise.all(
+      promises
+    );
+
+
+    await this.marquerConversationCommeLue(
+      conversationId,
+      userId
+    );
+  }
 };
