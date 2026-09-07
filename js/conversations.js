@@ -1,81 +1,187 @@
 /**
- * LUMA — Module Conversations
- * Gestion des listes de discussions, participants et indicateurs de lecture
+ * LUMA — Service des conversations
+ *
+ * Utilise la collection Firestore :
+ *
+ * chats/{chatId}
  */
 
 import { Database } from './database.js';
 
+
 export const ConversationsService = {
-  /**
-   * Écoute en direct les conversations pour l'utilisateur connecté
-   */
-  abonnerConversations(userId, onUpdate, onError) {
-    return Database.ecouterConversations(userId, onUpdate, onError);
+
+
+  /* ==========================================================
+     ABONNEMENT AUX CHATS
+  ========================================================== */
+
+  abonnerConversations(
+    userId,
+    onUpdate,
+    onError
+  ) {
+
+    return Database.ecouterConversations(
+      userId,
+      onUpdate,
+      onError
+    );
   },
 
-  /**
-   * Identifie l'autre participant dans une conversation privée
-   */
-  getAutreParticipant(conv, currentUserId) {
-    if (!conv || !conv.participants) return null;
-    const autreUid = conv.participants.find((uid) => uid !== currentUserId);
-    if (!autreUid) return null;
 
-    const details = conv.participantDetails?.[autreUid] || {};
+  /* ==========================================================
+     RÉCUPÉRER L'AUTRE PARTICIPANT
+  ========================================================== */
+
+  getAutreParticipant(
+    conv,
+    currentUserId
+  ) {
+
+    if (
+      !conv ||
+      !Array.isArray(
+        conv.participants
+      )
+    ) {
+
+      return null;
+    }
+
+
+    /*
+     * Le nouveau système utilise les emails.
+     */
+    const currentUser =
+      Database &&
+      null;
+
+
+    /*
+     * On cherche d'abord grâce aux participantDetails.
+     */
+    const details =
+      conv.participantDetails ||
+      {};
+
+
+    const participants =
+      conv.participants;
+
+
+    /*
+     * Le currentUserId peut être un UID.
+     * On identifie donc l'utilisateur actuel
+     * grâce à son email lorsque possible.
+     */
+
+    let currentEmail = null;
+
+
+    try {
+
+      const auth =
+        window.firebaseAuthCurrentUser;
+
+      if (
+        auth &&
+        auth.email
+      ) {
+
+        currentEmail =
+          auth.email
+            .toLowerCase()
+            .trim();
+      }
+
+    } catch (e) {
+      // Aucun problème : fallback ci-dessous.
+    }
+
+
+    /*
+     * Chercher l'autre email.
+     */
+    let autreEmail =
+      participants.find(
+        (email) =>
+          email !== currentEmail
+      );
+
+
+    /*
+     * Si currentEmail n'est pas disponible,
+     * prendre le deuxième participant.
+     */
+    if (!autreEmail) {
+
+      autreEmail =
+        participants[0];
+    }
+
+
+    if (!autreEmail) {
+      return null;
+    }
+
+
+    const autreDetails =
+      details[autreEmail] ||
+      {};
+
+
     return {
-      uid: autreUid,
-      nom: details.nom || 'Utilisateur Lumesys',
-      email: details.email || '',
-      photoUrl: details.photoUrl || '',
+
+      uid:
+        autreDetails.uid ||
+        '',
+
+      nom:
+        autreDetails.nom ||
+        autreEmail ||
+        'Utilisateur Lumesys',
+
+      email:
+        autreDetails.email ||
+        autreEmail ||
+        '',
+
+      photoUrl:
+        autreDetails.photoUrl ||
+        ''
     };
   },
 
-  /**
-   * Formate la date de manière élégante et concise pour la liste
-   */
-  formaterDate(timestamp) {
-    if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const now = new Date();
 
-    const isToday =
-      date.getDate() === now.getDate() &&
-      date.getMonth() === now.getMonth() &&
-      date.getFullYear() === now.getFullYear();
+  /* ==========================================================
+     DÉMARRER UNE CONVERSATION
+  ========================================================== */
 
-    if (isToday) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
+  async demarrerConversation(
+    moi,
+    destinataire
+  ) {
 
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const isYesterday =
-      date.getDate() === yesterday.getDate() &&
-      date.getMonth() === yesterday.getMonth() &&
-      date.getFullYear() === yesterday.getFullYear();
-
-    if (isYesterday) {
-      return 'Hier';
-    }
-
-    if (date.getFullYear() === now.getFullYear()) {
-      return date.toLocaleDateString([], { day: 'numeric', month: 'short' });
-    }
-
-    return date.toLocaleDateString([], { day: 'numeric', month: 'numeric', year: '2-digit' });
+    return await Database.creerOuRecupererConversation(
+      moi,
+      destinataire
+    );
   },
 
-  /**
-   * Ouvre ou initialise une conversation avec un contact Lumesys
-   */
-  async demarrerConversation(moi, destinataire) {
-    return await Database.creerOuRecupererConversation(moi, destinataire);
-  },
 
-  /**
-   * Marque la conversation comme lue
-   */
-  async marquerLue(conversationId, currentUserId) {
-    return await Database.marquerConversationCommeLue(conversationId, currentUserId);
-  },
+  /* ==========================================================
+     MARQUER LE CHAT COMME LU
+  ========================================================== */
+
+  async marquerLue(
+    conversationId,
+    currentUserId
+  ) {
+
+    return await Database.marquerConversationCommeLue(
+      conversationId,
+      currentUserId
+    );
+  }
 };
