@@ -3,19 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LUMA — Messagerie Temps Réel Lumesys</title>
-  <meta name="description" content="Plateforme de messagerie temps réel officielle de l'écosystème Lumesys">
-  <meta property="og:title" content="LUMA — Messagerie Temps Réel Lumesys">
-  <meta property="og:description" content="Plateforme de messagerie temps réel officielle de l'écosystème Lumesys">
+  <title>LUMA</title>
+  <meta name="description" content="Application de messagerie temps réel de l'écosystème Lumesys">
+  <meta property="og:title" content="LUMA">
+  <meta property="og:description" content="Application de messagerie temps réel de l'écosystème Lumesys">
   
   <link rel="icon" type="image/svg+xml" href="./public/icon.svg">
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#0f766e">
   
   <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/login.css">
+  <link rel="stylesheet" href="./css/chat.css">
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app": "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js",
+      "firebase/auth": "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js",
+      "firebase/storage": "https://www.gstatic.com/firebasejs/11.4.0/firebase-storage.js"
+    }
+  }
+  </script>
   
   <script>
-    // Enregistrement Service Worker pour PWA avec chemin relatif
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js').catch(function(e) {
         console.warn('PWA Service Worker non enregistré:', e);
@@ -23,169 +35,369 @@
     }
   </script>
 </head>
-<body class="h-full flex flex-col bg-slate-50 text-slate-900 selection:bg-teal-100 selection:text-teal-900">
+<body class="h-full bg-slate-100 flex items-center justify-center overflow-hidden font-sans">
 
-  <!-- En-tête de navigation -->
-  <header class="w-full bg-white border-b border-slate-200 sticky top-0 z-30">
-    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs">
-          L
-        </div>
-        <div>
-          <span class="font-bold text-lg tracking-tight text-slate-900">LUMA</span>
-          <span class="hidden sm:inline-block ml-2 px-2 py-0.5 text-[11px] font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-full">
-            Écosystème Lumesys
-          </span>
-        </div>
+  <!-- ============================================================
+       1. VUE AUTHENTIFICATION (Affichée si visiteur non connecté)
+       ============================================================ -->
+  <div id="auth-view" class="auth-wrapper w-full h-full flex items-center justify-center p-4 bg-slate-50 hidden">
+    <div class="auth-card animate-fade-in">
+      
+      <!-- En-tête -->
+      <div class="auth-header">
+        <div class="auth-logo">L</div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-tight">Bienvenue sur LUMA</h1>
+        <p class="text-xs text-slate-500 mt-1">Messagerie sécurisée de l'écosystème Lumesys</p>
       </div>
 
-      <nav class="flex items-center gap-3">
-        <a id="nav-chat-link" href="./chat.html" class="hidden px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors shadow-2xs">
-          Ouvrir le Chat
-        </a>
-        <a id="nav-login-link" href="./login.html" class="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition-colors">
-          Connexion
-        </a>
-        <a id="nav-profile-link" href="./profile.html" class="hidden px-3.5 py-1.5 text-slate-600 hover:text-slate-900 text-xs font-semibold">
-          Mon Profil
-        </a>
-      </nav>
-    </div>
-  </header>
+      <!-- Corps du formulaire -->
+      <div class="auth-body">
+        
+        <!-- Alerte d'erreur -->
+        <div id="auth-error" class="auth-error hidden mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium text-center"></div>
 
-  <!-- Bannière d'état de configuration Firebase -->
-  <div id="firebase-notice-bar" class="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 text-center hidden">
-    <span class="font-semibold">Note d'intégration :</span> LUMA se synchronise avec la collection <code>utilisateurs</code> de Firebase.
-    <a href="#firebase-setup" class="underline ml-1 font-bold">Consulter la configuration</a>
+        <!-- Formulaire de Connexion -->
+        <form id="login-form">
+          <div class="auth-input-group">
+            <label for="login-email">Adresse email professionnelle</label>
+            <input id="login-email" type="email" class="auth-input" placeholder="nom@lumesys.com" required autocomplete="email">
+          </div>
+
+          <div class="auth-input-group">
+            <label for="login-password">Mot de passe</label>
+            <input id="login-password" type="password" class="auth-input" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+
+          <button type="submit" id="btn-submit-login" class="btn-primary mt-2">
+            Se connecter
+          </button>
+        </form>
+
+        <!-- Formulaire d'Inscription (masqué par défaut) -->
+        <form id="signup-form" class="hidden">
+          <div class="auth-input-group">
+            <label for="signup-nom">Nom complet ou pseudonyme</label>
+            <input id="signup-nom" type="text" class="auth-input" placeholder="Jean Dupont" required autocomplete="name">
+          </div>
+
+          <div class="auth-input-group">
+            <label for="signup-email">Adresse email</label>
+            <input id="signup-email" type="email" class="auth-input" placeholder="nom@lumesys.com" required autocomplete="email">
+          </div>
+
+          <div class="auth-input-group">
+            <label for="signup-password">Mot de passe (6 caractères min.)</label>
+            <input id="signup-password" type="password" class="auth-input" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+          </div>
+
+          <button type="submit" id="btn-submit-signup" class="btn-primary mt-2">
+            Créer mon compte
+          </button>
+        </form>
+
+        <!-- Séparateur -->
+        <div class="auth-divider">
+          <span>ou</span>
+        </div>
+
+        <!-- Connexion Google -->
+        <button type="button" id="btn-google-login" class="btn-google">
+          <svg class="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+            <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+            <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2c0 2.8.7 5.5 1.9 7.8l3.7-2.9z"/>
+            <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
+          </svg>
+          Continuer avec Google
+        </button>
+
+        <!-- Bascule Connexion / Inscription -->
+        <div class="mt-6 text-center">
+          <button type="button" id="toggle-auth-form" class="text-xs font-semibold text-teal-700 hover:text-teal-800 underline">
+            Nouveau sur Lumesys ? Créer un compte
+          </button>
+        </div>
+
+      </div>
+    </div>
   </div>
 
-  <!-- Contenu Principal -->
-  <main class="flex-1 max-w-5xl mx-auto px-4 py-12 w-full flex flex-col items-center justify-center text-center">
-    
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold mb-6">
-      <span class="w-2 h-2 rounded-full bg-teal-600 animate-pulse"></span>
-      Messagerie Réelle — Hébergée sur GitHub Pages
-    </div>
+  <!-- ============================================================
+       2. VUE MESSAGERIE LUMA (Affichée dès que l'utilisateur est connecté)
+       ============================================================ -->
+  <div id="chat-view" class="chat-app-container hidden">
+    <div class="chat-card">
 
-    <h1 class="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight max-w-3xl leading-tight">
-      La plateforme de messagerie instantanée de <span class="text-teal-700">Lumesys</span>
-    </h1>
-
-    <p class="mt-4 text-base sm:text-lg text-slate-600 max-w-2xl">
-      Échangez en temps réel avec vos collaborateurs en toute sécurité. Synchronisation instantanée, accusés de lecture, et compatibilité complète avec la collection <code class="bg-slate-100 px-1.5 py-0.5 rounded text-teal-800 font-mono text-sm">utilisateurs</code> existante.
-    </p>
-
-    <!-- Call to Actions -->
-    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-      <a href="./chat.html" class="px-6 py-3 bg-teal-700 hover:bg-teal-800 text-white font-semibold text-sm rounded-xl shadow-sm transition-all hover:shadow-md">
-        Accéder aux discussions
-      </a>
-      <a href="./login.html" class="px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-sm rounded-xl transition-all">
-        Se connecter / S'inscrire
-      </a>
-    </div>
-
-    <!-- Grille des fonctionnalités clés -->
-    <div class="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 w-full text-left">
-      
-      <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center mb-4 font-bold">
-          ⚡
-        </div>
-        <h2 class="text-sm font-bold text-slate-900 mb-1">Temps Réel Absolu</h2>
-        <p class="text-xs text-slate-600 leading-relaxed">
-          Les messages s'affichent instantanément grâce aux flux Firestore <code>onSnapshot</code> avec accusés de réception et de lecture.
-        </p>
-      </div>
-
-      <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center mb-4 font-bold">
-          🔒
-        </div>
-        <h2 class="text-sm font-bold text-slate-900 mb-1">Sécurité Zéro-Trust</h2>
-        <p class="text-xs text-slate-600 leading-relaxed">
-          Règles Firestore strictes vérifiant l'appartenance aux conversations, protégeant l'intégrité de la collection <code>utilisateurs</code>.
-        </p>
-      </div>
-
-      <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center mb-4 font-bold">
-          🌐
-        </div>
-        <h2 class="text-sm font-bold text-slate-900 mb-1">Hébergement GitHub Pages</h2>
-        <p class="text-xs text-slate-600 leading-relaxed">
-          Zéro coût d'hébergement serveur, chemins d'accès 100% relatifs et compatibilité PWA pour installation sur smartphone et bureau.
-        </p>
-      </div>
-
-    </div>
-
-    <!-- Indicateur d'infrastructure Firebase connectée -->
-    <div class="mt-16 w-full bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-2xs">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <h3 class="text-sm font-bold text-slate-900">Infrastructure Firebase Connectée</h3>
+      <!-- 1. VOLET LATÉRAL (Sidebar) -->
+      <aside id="chat-sidebar-pane" class="chat-sidebar flex flex-col h-full border-r border-slate-200 bg-white">
+        
+        <!-- En-tête profil utilisateur connecté -->
+        <div class="sidebar-header flex items-center justify-between p-3.5 border-b border-slate-100">
+          <div class="flex items-center gap-3 min-w-0">
+            <a href="./profile.html" title="Modifier mon profil" class="relative shrink-0 block">
+              <div id="sidebar-user-avatar" class="w-10 h-10 rounded-full bg-teal-700 text-white font-bold flex items-center justify-center text-sm shadow-2xs">
+                U
+              </div>
+              <span class="status-dot status-online absolute bottom-0 right-0"></span>
+            </a>
+            <div class="min-w-0">
+              <a href="./profile.html" class="block">
+                <h3 id="sidebar-user-name" class="text-xs font-bold text-slate-900 truncate hover:text-teal-700 transition-colors">
+                  Chargement...
+                </h3>
+              </a>
+              <span class="text-[10px] text-teal-700 font-semibold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-teal-600"></span> En ligne
+              </span>
+            </div>
           </div>
-          <p class="text-xs text-slate-500 mt-0.5">Instance de production : <span class="font-mono font-semibold text-teal-700">lumina-analytics</span> (Écosystème Lumesys)</p>
-        </div>
-        <span class="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-full flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Synchronisation active
-        </span>
-      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600">
-        <div>
-          <h4 class="font-semibold text-slate-800 mb-1">Collections synchronisées :</h4>
-          <ul class="list-disc list-inside space-y-1 text-slate-500">
-            <li>Collection d'utilisateurs : <code class="text-teal-700">utilisateurs</code> & <code class="text-teal-700">public_profiles</code></li>
-            <li>Messagerie temps réel : <code class="text-teal-700">conversations/{id}/messages</code></li>
-            <li>Chiffrement & Sécurité : <code class="text-teal-700">firestore.rules (Zéro-Trust)</code></li>
-          </ul>
+          <div class="flex items-center gap-1 text-slate-500">
+            <!-- Bouton son -->
+            <button id="sound-toggle-btn" class="p-1.5 hover:bg-slate-100 rounded-lg text-teal-700 transition-colors" title="Activer / Couper les sons de notification">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+              </svg>
+            </button>
+
+            <!-- Accès Profil -->
+            <a href="./profile.html" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors" title="Mon Profil Lumesys">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+            </a>
+
+            <!-- Déconnexion -->
+            <button id="logout-btn" class="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors" title="Se déconnecter">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+              </svg>
+            </button>
+          </div>
         </div>
-        <div>
-          <h4 class="font-semibold text-slate-800 mb-1">Compatibilité GitHub Pages :</h4>
-          <p class="text-slate-500 leading-relaxed">
-            Hébergement statique sous dépôt <code>ora</code>, routage avec chemins relatifs <code>./</code>, et installation PWA sur mobile et ordinateur.
+
+        <!-- Barre de recherche et Nouvelle Discussion -->
+        <div class="p-3 border-b border-slate-100 bg-white">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="relative flex-1">
+              <input id="user-search-field" type="text" placeholder="Rechercher un membre..." class="w-full text-xs py-2 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-600 focus:bg-white">
+              <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <!-- Résultats recherche déroulants -->
+              <div id="search-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto hidden p-1"></div>
+            </div>
+            
+            <button id="open-new-chat-modal" class="p-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg shadow-2xs transition-colors shrink-0" title="Nouvelle discussion">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Liste des conversations -->
+        <div id="conversations-container" class="flex-1 overflow-y-auto py-2">
+          <div class="p-6 text-center text-slate-400 text-xs">
+            Chargement de vos discussions...
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- 2. VOLET PRINCIPAL DU CHAT (Main Area) -->
+      <main id="chat-main-pane" class="chat-main hidden md:flex flex-1 flex-col h-full bg-slate-50">
+        
+        <!-- ÉTAT VIDE (Quand aucune conversation n'est active) -->
+        <div id="chat-empty-panel" class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <div class="w-16 h-16 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center mb-4 shadow-2xs font-bold text-2xl">
+            L
+          </div>
+          <h2 class="text-base font-bold text-slate-800">Bienvenue sur votre messagerie LUMA</h2>
+          <p class="text-xs text-slate-500 max-w-sm mt-1">
+            Sélectionnez une discussion à gauche ou cliquez sur le bouton <strong>"+"</strong> pour initier un échange avec un membre de l'écosystème Lumesys.
           </p>
         </div>
+
+        <!-- ÉTAT ACTIF (Conversation sélectionnée) -->
+        <div id="chat-active-panel" class="hidden flex-1 flex flex-col h-full">
+          
+          <!-- En-tête de la conversation -->
+          <div class="chat-header">
+            <div class="flex items-center gap-3">
+              <!-- Bouton retour mobile -->
+              <button id="mobile-back-btn" class="md:hidden p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+              </button>
+
+              <div id="active-recipient-avatar" class="w-10 h-10 rounded-full bg-teal-700 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                ?
+              </div>
+
+              <div>
+                <h3 id="active-recipient-name" class="text-sm font-bold text-slate-900 truncate">
+                  Destinataire
+                </h3>
+                <p id="active-recipient-email" class="text-[11px] text-slate-500 truncate">
+                  email@lumesys.com
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Temps réel actif
+              </span>
+            </div>
+          </div>
+
+          <!-- Chronologie des messages -->
+          <div id="messages-timeline" class="chat-timeline">
+            <!-- Rempli dynamiquement -->
+          </div>
+
+          <!-- Compositeur de message -->
+          <div class="chat-composer">
+            <div class="composer-box">
+              <textarea id="message-textarea" class="composer-textarea" rows="1" placeholder="Écrivez votre message... (Entrée pour envoyer)"></textarea>
+              
+              <button id="send-message-btn" class="composer-send-btn" title="Envoyer le message">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Modale Nouvelle Discussion -->
+  <div id="new-chat-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 animate-fade-in">
+      <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+        <h4 class="text-sm font-bold text-slate-900">Nouvelle Discussion</h4>
+        <button id="close-new-chat-modal" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+      </div>
+      <p class="text-xs text-slate-500 mb-3">
+        Sélectionnez un utilisateur de l'écosystème Lumesys :
+      </p>
+      <div id="modal-users-container" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+        <div class="text-center py-6 text-xs text-slate-400">Chargement des membres...</div>
       </div>
     </div>
+  </div>
 
-  </main>
+  <!-- Toast Notification intégrée -->
+  <div id="luma-toast" class="fixed bottom-4 right-4 z-50 bg-slate-900 text-white text-xs px-4 py-2 rounded-xl shadow-lg transition-opacity duration-300 hidden opacity-0"></div>
 
-  <!-- Pied de page -->
-  <footer class="w-full bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-      <p>© LUMA — Écosystème Lumesys. Messagerie réelle temps réel.</p>
-      <div class="flex items-center gap-4 font-medium">
-        <a href="./chat.html" class="hover:text-teal-700">Messagerie</a>
-        <a href="./login.html" class="hover:text-teal-700">Connexion</a>
-        <a href="./profile.html" class="hover:text-teal-700">Profil</a>
-      </div>
-    </div>
-  </footer>
-
-  <!-- Script de détection d'authentification et routage -->
+  <!-- ============================================================
+       SCRIPT PRINCIPAL D'ORCHESTRATION LUMA (Authentification + Messagerie)
+       ============================================================ -->
   <script type="module">
     import { AuthService } from './js/auth.js';
+    import { ChatController } from './js/chat.js';
 
-    // Mise à jour des boutons de navigation selon la session
-    AuthService.init((user) => {
-      const chatLink = document.getElementById('nav-chat-link');
-      const loginLink = document.getElementById('nav-login-link');
-      const profileLink = document.getElementById('nav-profile-link');
+    const authView = document.getElementById('auth-view');
+    const chatView = document.getElementById('chat-view');
 
-      if (user) {
-        if (chatLink) chatLink.classList.remove('hidden');
-        if (profileLink) profileLink.classList.remove('hidden');
-        if (loginLink) loginLink.classList.add('hidden');
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const toggleBtn = document.getElementById('toggle-auth-form');
+    const googleBtn = document.getElementById('btn-google-login');
+    const errorBox = document.getElementById('auth-error');
+
+    const showError = (msg) => {
+      errorBox.textContent = msg;
+      errorBox.classList.remove('hidden');
+    };
+
+    const clearError = () => {
+      errorBox.textContent = '';
+      errorBox.classList.add('hidden');
+    };
+
+    // Basculer entre formulaire Connexion et Inscription
+    toggleBtn.addEventListener('click', () => {
+      clearError();
+      const isLoginVisible = !loginForm.classList.contains('hidden');
+      if (isLoginVisible) {
+        loginForm.classList.add('hidden');
+        signupForm.classList.remove('hidden');
+        toggleBtn.textContent = 'Vous avez déjà un compte ? Se connecter';
       } else {
-        if (chatLink) chatLink.classList.add('hidden');
-        if (profileLink) profileLink.classList.add('hidden');
-        if (loginLink) loginLink.classList.remove('hidden');
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
+        toggleBtn.textContent = 'Nouveau sur Lumesys ? Créer un compte';
+      }
+    });
+
+    // 1. Soumission Connexion Email + Mot de passe
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError();
+      const email = document.getElementById('login-email').value;
+      const pass = document.getElementById('login-password').value;
+
+      try {
+        await AuthService.connexionEmail(email, pass);
+        // La mise à jour de l'UI se fera automatiquement via le listener onAuthChange
+      } catch (err) {
+        showError('Identifiants invalides ou compte introuvable : ' + (err.message || ''));
+      }
+    });
+
+    // 2. Soumission Inscription Email
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError();
+      const nom = document.getElementById('signup-nom').value;
+      const email = document.getElementById('signup-email').value;
+      const pass = document.getElementById('signup-password').value;
+
+      try {
+        await AuthService.inscriptionEmail(email, pass, nom);
+        // La mise à jour de l'UI se fera automatiquement via le listener onAuthChange
+      } catch (err) {
+        showError('Impossible de créer le compte : ' + (err.message || ''));
+      }
+    });
+
+    // 3. Connexion Google
+    googleBtn.addEventListener('click', async () => {
+      clearError();
+      try {
+        await AuthService.connexionGoogle();
+        // La mise à jour de l'UI se fera automatiquement via le listener onAuthChange
+      } catch (err) {
+        showError('Erreur lors de la connexion Google : ' + (err.message || ''));
+      }
+    });
+
+    // Initialisation du contrôleur de Chat sans redirection forcée vers une autre page
+    ChatController.init({
+      redirectOnUnauth: false,
+      onAuthChange: (user, profile) => {
+        if (user) {
+          // Utilisateur connecté -> Affichage direct de la messagerie LUMA
+          authView.classList.add('hidden');
+          chatView.classList.remove('hidden');
+        } else {
+          // Visiteur non connecté -> Affichage de l'écran de connexion / inscription
+          chatView.classList.add('hidden');
+          authView.classList.remove('hidden');
+        }
+      },
+      onLogout: () => {
+        chatView.classList.add('hidden');
+        authView.classList.remove('hidden');
+        clearError();
       }
     });
   </script>

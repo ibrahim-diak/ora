@@ -20,21 +20,27 @@ export const ChatController = {
   unsubscribeConversations: null,
   unsubscribeMessages: null,
   soundEnabled: true,
+  onLogout: null,
 
   /**
-   * Initialise le contrôleur sur chat.html
+   * Initialise le contrôleur du chat
    */
-  init() {
+  init({ redirectOnUnauth = true, onLogout = null, onAuthChange = null } = {}) {
+    this.onLogout = onLogout;
     AuthService.init((user, profile) => {
       this.currentUser = user;
       this.currentProfile = profile;
 
       if (!user) {
-        // Redirection vers login.html avec chemin relatif compatible GitHub Pages
-        window.location.href = './login.html';
+        this.cleanup();
+        if (onAuthChange) onAuthChange(null, null);
+        if (redirectOnUnauth) {
+          window.location.href = './index.html';
+        }
         return;
       }
 
+      if (onAuthChange) onAuthChange(user, profile);
       this.setupDOM();
       this.renderCurrentUserHeader();
       this.startConversationsListener();
@@ -42,19 +48,38 @@ export const ChatController = {
     });
   },
 
+  cleanup() {
+    if (this.unsubscribeConversations) {
+      this.unsubscribeConversations();
+      this.unsubscribeConversations = null;
+    }
+    if (this.unsubscribeMessages) {
+      this.unsubscribeMessages();
+      this.unsubscribeMessages = null;
+    }
+    this.activeConversation = null;
+    this.activeRecipient = null;
+  },
+
   setupDOM() {
     // Bouton de déconnexion
     const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
+    if (logoutBtn && !logoutBtn.dataset.bound) {
+      logoutBtn.dataset.bound = 'true';
       logoutBtn.addEventListener('click', async () => {
         await AuthService.deconnexion();
-        window.location.href = './login.html';
+        if (this.onLogout) {
+          this.onLogout();
+        } else {
+          window.location.href = './index.html';
+        }
       });
     }
 
     // Bouton sonore
     const soundToggle = document.getElementById('sound-toggle-btn');
-    if (soundToggle) {
+    if (soundToggle && !soundToggle.dataset.bound) {
+      soundToggle.dataset.bound = 'true';
       soundToggle.addEventListener('click', () => {
         this.soundEnabled = !this.soundEnabled;
         soundToggle.classList.toggle('text-teal-700', this.soundEnabled);
@@ -66,11 +91,13 @@ export const ChatController = {
     const sendBtn = document.getElementById('send-message-btn');
     const msgInput = document.getElementById('message-textarea');
 
-    if (sendBtn) {
+    if (sendBtn && !sendBtn.dataset.bound) {
+      sendBtn.dataset.bound = 'true';
       sendBtn.addEventListener('click', () => this.sendMessage());
     }
 
-    if (msgInput) {
+    if (msgInput && !msgInput.dataset.bound) {
+      msgInput.dataset.bound = 'true';
       msgInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -88,7 +115,8 @@ export const ChatController = {
     // Recherche d'utilisateurs Lumesys
     const searchInput = document.getElementById('user-search-field');
     let timeout = null;
-    if (searchInput) {
+    if (searchInput && !searchInput.dataset.bound) {
+      searchInput.dataset.bound = 'true';
       searchInput.addEventListener('input', (e) => {
         clearTimeout(timeout);
         const query = e.target.value;
@@ -105,7 +133,8 @@ export const ChatController = {
     const modal = document.getElementById('new-chat-modal');
     const closeModalBtn = document.getElementById('close-new-chat-modal');
 
-    if (newChatBtn && modal) {
+    if (newChatBtn && modal && !newChatBtn.dataset.bound) {
+      newChatBtn.dataset.bound = 'true';
       newChatBtn.addEventListener('click', async () => {
         modal.classList.remove('hidden');
         if (this.currentUser) {
@@ -115,13 +144,15 @@ export const ChatController = {
       });
     }
 
-    if (closeModalBtn && modal) {
+    if (closeModalBtn && modal && !closeModalBtn.dataset.bound) {
+      closeModalBtn.dataset.bound = 'true';
       closeModalBtn.addEventListener('click', () => modal.classList.add('hidden'));
     }
 
     // Bouton retour sur mobile
     const mobileBackBtn = document.getElementById('mobile-back-btn');
-    if (mobileBackBtn) {
+    if (mobileBackBtn && !mobileBackBtn.dataset.bound) {
+      mobileBackBtn.dataset.bound = 'true';
       mobileBackBtn.addEventListener('click', () => {
         this.toggleMobileView('sidebar');
       });

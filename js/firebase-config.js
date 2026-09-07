@@ -22,33 +22,13 @@ const DEFAULT_LUMESYS_CONFIG = {
 // Clé de stockage local pour la configuration personnalisée Lumesys
 const STORAGE_CONFIG_KEY = 'luma_lumesys_firebase_config';
 
-// Configuration par défaut ou découverte automatique
+// Configuration directe du projet réel lumina-analytics (Écosystème Lumesys)
 export function getStoredFirebaseConfig() {
-  try {
-    const raw = localStorage.getItem(STORAGE_CONFIG_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      // Si la configuration stockée n'est pas un placeholder factice, on la prend, sinon lumina-analytics
-      if (parsed && parsed.projectId && parsed.projectId !== 'lumesys-app' && parsed.apiKey && !parsed.apiKey.includes('...')) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.warn('Erreur lors de la lecture de la configuration locale:', e);
-  }
-
-  // Utiliser la configuration réelle de Lumesys / Lumina
   return DEFAULT_LUMESYS_CONFIG;
 }
 
 export function saveFirebaseConfig(config) {
-  try {
-    localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(config));
-    return true;
-  } catch (e) {
-    console.error('Impossible de sauvegarder la configuration Firebase:', e);
-    return false;
-  }
+  return true;
 }
 
 export function clearFirebaseConfig() {

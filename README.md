@@ -85,10 +85,8 @@ git push -u origin main
 
 LUMA utilise la collection préexistante `utilisateurs` sans écraser vos données historiques.
 
-### 1. Configuration des identifiants Firebase
-Vous pouvez configurer Firebase de deux façons :
-- **Directement dans l'interface** : Cliquez sur *"Renseigner mes identifiants"* sur la page d'accueil ou utilisez la modale de configuration. Vos clés sont enregistrées localement dans votre navigateur (`localStorage`).
-- **En dur dans le code (optionnel)** : Ouvrez `js/firebase-config.js` et remplacez les valeurs par défaut par celles de votre projet Firebase (Console Firebase > Paramètres du projet > Vos applications > SDK Web).
+### 1. Configuration Firebase Automatique
+LUMA est configuré directement avec le projet Lumesys existant (`lumina-analytics`). Aucune saisie manuelle de clés n'est demandée à l'utilisateur final.
 
 ### 2. Déploiement des Règles de Sécurité (`firestore.rules`)
 Avec le CLI Firebase :
