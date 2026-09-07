@@ -29,7 +29,9 @@
   
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js').catch(function(e) {
+      navigator.serviceWorker.register('./service-worker.js').then((reg) => {
+        reg.update();
+      }).catch(function(e) {
         console.warn('PWA Service Worker non enregistré:', e);
       });
     }
