@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Sécurité par défaut : rejet de tout accès non explicite
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Fonctions d'authentification et de vérification d'identité
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Vérifie si l'utilisateur est propriétaire du document (soit par UID, soit par Email Lumesys)
+    function isAccountOwner(userKey) {
+      return isSignedIn() && (
+        request.auth.uid == userKey ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == userKey.lower())
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ==========================================
+    // 1. UTILISATEURS (Collection existante Lumesys)
+    // ==========================================
+    match /utilisateurs/{userKey} {
+      // Lecture permise pour l'annuaire et la recherche par les membres connectés
+      allow get, list: if isSignedIn();
+
+      // Création et mise à jour strictement limitées au titulaire du compte
+      allow create, update: if isAccountOwner(userKey);
+
+      // Préservation des comptes dans l'écosystème Lumesys
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 2. PROFILS PUBLICS (Collection Lumesys pour la découverte messagerie)
+    // ==========================================
+    match /public_profiles/{userKey} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isAccountOwner(userKey);
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 3. CONVERSATIONS
+    // ==========================================
+    function isConversationParticipant(convData) {
+      return isSignedIn() && (
+        request.auth.uid in convData.participants ||
+        (request.auth.token.email != null && request.auth.token.email in convData.participants)
+      );
+    }
+
+    match /conversations/{conversationId} {
+      // Un membre ne peut lire et lister que les discussions dont il est participant
+      allow get: if isSignedIn() && isConversationParticipant(existing());
+      allow list: if isSignedIn();
+
+      // Création : l'utilisateur authentifié doit être inclus dans la liste des participants
+      allow create: if isSignedIn() &&
+                    incoming().participants is list &&
+                    incoming().participants.size() >= 2 &&
+                    (
+                      request.auth.uid in incoming().participants ||
+                      (request.auth.token.email != null && request.auth.token.email in incoming().participants)
+                    );
+
+      // Mise à jour : actualisation du dernier message ou métadonnées par un participant
+      allow update: if isSignedIn() &&
+                    isConversationParticipant(existing()) &&
+                    // Interdiction de modifier la liste des participants existants sans accord
+                    (!('participants' in incoming()) || incoming().participants == existing().participants);
+
+      allow delete: if false;
+
+      // ==========================================
+      // 4. SOUS-COLLECTION MESSAGES
+      // ==========================================
+      match /messages/{messageId} {
+        allow get, list: if isSignedIn() &&
+                         isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+
+        allow create: if isSignedIn() &&
+                      isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data) &&
+                      (incoming().expediteurId == request.auth.uid || incoming().expediteurId == request.auth.token.email) &&
+                      incoming().contenu is string &&
+                      incoming().contenu.size() > 0 &&
+                      incoming().contenu.size() <= 4000;
+
+        // Mise à jour autorisée pour l'accusé de lecture ('lu': true) par un participant
+        allow update: if isSignedIn() &&
+                      isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+
+        allow delete: if false;
+      }
+    }
+  }
+}

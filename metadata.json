@@ -1,0 +1,6 @@
+{
+  "name": "LUMA",
+  "description": "Application de messagerie temps réel de l'écosystème Lumesys",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

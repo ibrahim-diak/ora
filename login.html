@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LUMA — Connexion & Inscription | Lumesys</title>
+  <meta name="description" content="Accès sécurisé à la messagerie temps réel LUMA pour l'écosystème Lumesys">
+  
+  <link rel="icon" type="image/svg+xml" href="./public/icon.svg">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f766e">
+  
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/login.css">
+</head>
+<body class="h-full bg-slate-50">
+
+  <div class="auth-wrapper">
+    <div class="auth-card animate-fade-in">
+      
+      <!-- En-tête -->
+      <div class="auth-header">
+        <div class="auth-logo">L</div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-tight">Bienvenue sur LUMA</h1>
+        <p class="text-xs text-slate-500 mt-1">Messagerie sécurisée de l'écosystème Lumesys</p>
+      </div>
+
+      <!-- Corps du formulaire -->
+      <div class="auth-body">
+        
+        <!-- Alerte d'erreur -->
+        <div id="auth-error" class="auth-error hidden"></div>
+
+        <!-- Formulaire de Connexion -->
+        <form id="login-form">
+          <div class="auth-input-group">
+            <label for="login-email">Adresse email professionnelle</label>
+            <input id="login-email" type="email" class="auth-input" placeholder="nom@lumesys.com" required autocomplete="email">
+          </div>
+
+          <div class="auth-input-group">
+            <label for="login-password">Mot de passe</label>
+            <input id="login-password" type="password" class="auth-input" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+
+          <button type="submit" id="btn-submit-login" class="btn-primary mt-2">
+            Se connecter
+          </button>
+        </form>
+
+        <!-- Formulaire d'Inscription (masqué par défaut) -->
+        <form id="signup-form" class="hidden">
+          <div class="auth-input-group">
+            <label for="signup-nom">Nom complet ou pseudonyme</label>
+            <input id="signup-nom" type="text" class="auth-input" placeholder="Jean Dupont" required autocomplete="name">
+          </div>
+
+          <div class="auth-input-group">
+            <label for="signup-email">Adresse email</label>
+            <input id="signup-email" type="email" class="auth-input" placeholder="nom@lumesys.com" required autocomplete="email">
+          </div>
+
+          <div class="auth-input-group">
+            <label for="signup-password">Mot de passe (6 caractères min.)</label>
+            <input id="signup-password" type="password" class="auth-input" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+          </div>
+
+          <button type="submit" id="btn-submit-signup" class="btn-primary mt-2">
+            Créer mon compte
+          </button>
+        </form>
+
+        <!-- Séparateur -->
+        <div class="auth-divider">
+          <span>ou</span>
+        </div>
+
+        <!-- Connexion Google -->
+        <button type="button" id="btn-google-login" class="btn-google">
+          <svg class="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+            <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+            <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2c0 2.8.7 5.5 1.9 7.8l3.7-2.9z"/>
+            <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
+          </svg>
+          Continuer avec Google
+        </button>
+
+        <!-- Bascule Connexion / Inscription -->
+        <div class="mt-6 text-center">
+          <button type="button" id="toggle-auth-form" class="text-xs font-semibold text-teal-700 hover:text-teal-800 underline">
+            Nouveau sur Lumesys ? Créer un compte
+          </button>
+        </div>
+
+        <!-- Retour à l'accueil -->
+        <div class="mt-4 text-center">
+          <a href="./index.html" class="text-xs text-slate-400 hover:text-slate-600">
+            ← Retourner à l'accueil
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { AuthService } from './js/auth.js';
+
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const toggleBtn = document.getElementById('toggle-auth-form');
+    const googleBtn = document.getElementById('btn-google-login');
+    const errorBox = document.getElementById('auth-error');
+
+    // Redirection automatique si déjà connecté
+    AuthService.init((user) => {
+      if (user) {
+        window.location.href = './chat.html';
+      }
+    });
+
+    const showError = (msg) => {
+      errorBox.textContent = msg;
+      errorBox.classList.remove('hidden');
+    };
+
+    const clearError = () => {
+      errorBox.textContent = '';
+      errorBox.classList.add('hidden');
+    };
+
+    // Basculer entre connexion et inscription
+    toggleBtn.addEventListener('click', () => {
+      clearError();
+      const isLoginVisible = !loginForm.classList.contains('hidden');
+      if (isLoginVisible) {
+        loginForm.classList.add('hidden');
+        signupForm.classList.remove('hidden');
+        toggleBtn.textContent = 'Vous avez déjà un compte ? Se connecter';
+      } else {
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
+        toggleBtn.textContent = 'Nouveau sur Lumesys ? Créer un compte';
+      }
+    });
+
+    // Soumission Connexion Email
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError();
+      const email = document.getElementById('login-email').value;
+      const pass = document.getElementById('login-password').value;
+
+      try {
+        await AuthService.connexionEmail(email, pass);
+        window.location.href = './chat.html';
+      } catch (err) {
+        showError('Identifiants invalides ou compte introuvable dans Firebase.');
+      }
+    });
+
+    // Soumission Inscription Email
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError();
+      const nom = document.getElementById('signup-nom').value;
+      const email = document.getElementById('signup-email').value;
+      const pass = document.getElementById('signup-password').value;
+
+      try {
+        await AuthService.inscriptionEmail(email, pass, nom);
+        window.location.href = './chat.html';
+      } catch (err) {
+        showError('Impossible de créer le compte : ' + err.message);
+      }
+    });
+
+    // Connexion Google
+    googleBtn.addEventListener('click', async () => {
+      clearError();
+      try {
+        await AuthService.connexionGoogle();
+        window.location.href = './chat.html';
+      } catch (err) {
+        showError('Erreur de connexion avec Google : ' + err.message);
+      }
+    });
+  </script>
+</body>
+</html>

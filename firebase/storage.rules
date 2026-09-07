@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Règle par défaut : aucun accès non autorisé
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // 1. Avatars de profil : lecture publique, écriture réservée au propriétaire
+    match /avatars/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024 // max 5 Mo
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // 2. Pièces jointes de conversations : accessible aux utilisateurs connectés avec taille max
+    match /attachments/{conversationId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && request.resource.size < 15 * 1024 * 1024; // max 15 Mo
+    }
+  }
+}

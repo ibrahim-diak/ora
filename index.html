@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LUMA — Messagerie Temps Réel Lumesys</title>
+  <meta name="description" content="Plateforme de messagerie temps réel officielle de l'écosystème Lumesys">
+  <meta property="og:title" content="LUMA — Messagerie Temps Réel Lumesys">
+  <meta property="og:description" content="Plateforme de messagerie temps réel officielle de l'écosystème Lumesys">
+  
+  <link rel="icon" type="image/svg+xml" href="./public/icon.svg">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f766e">
+  
+  <link rel="stylesheet" href="./css/style.css">
+  
+  <script>
+    // Enregistrement Service Worker pour PWA avec chemin relatif
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js').catch(function(e) {
+        console.warn('PWA Service Worker non enregistré:', e);
+      });
+    }
+  </script>
+</head>
+<body class="h-full flex flex-col bg-slate-50 text-slate-900 selection:bg-teal-100 selection:text-teal-900">
+
+  <!-- En-tête de navigation -->
+  <header class="w-full bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl shadow-xs">
+          L
+        </div>
+        <div>
+          <span class="font-bold text-lg tracking-tight text-slate-900">LUMA</span>
+          <span class="hidden sm:inline-block ml-2 px-2 py-0.5 text-[11px] font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-full">
+            Écosystème Lumesys
+          </span>
+        </div>
+      </div>
+
+      <nav class="flex items-center gap-3">
+        <a id="nav-chat-link" href="./chat.html" class="hidden px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors shadow-2xs">
+          Ouvrir le Chat
+        </a>
+        <a id="nav-login-link" href="./login.html" class="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition-colors">
+          Connexion
+        </a>
+        <a id="nav-profile-link" href="./profile.html" class="hidden px-3.5 py-1.5 text-slate-600 hover:text-slate-900 text-xs font-semibold">
+          Mon Profil
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Bannière d'état de configuration Firebase -->
+  <div id="firebase-notice-bar" class="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 text-center hidden">
+    <span class="font-semibold">Note d'intégration :</span> LUMA se synchronise avec la collection <code>utilisateurs</code> de Firebase.
+    <a href="#firebase-setup" class="underline ml-1 font-bold">Consulter la configuration</a>
+  </div>
+
+  <!-- Contenu Principal -->
+  <main class="flex-1 max-w-5xl mx-auto px-4 py-12 w-full flex flex-col items-center justify-center text-center">
+    
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold mb-6">
+      <span class="w-2 h-2 rounded-full bg-teal-600 animate-pulse"></span>
+      Messagerie Réelle — Hébergée sur GitHub Pages
+    </div>
+
+    <h1 class="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight max-w-3xl leading-tight">
+      La plateforme de messagerie instantanée de <span class="text-teal-700">Lumesys</span>
+    </h1>
+
+    <p class="mt-4 text-base sm:text-lg text-slate-600 max-w-2xl">
+      Échangez en temps réel avec vos collaborateurs en toute sécurité. Synchronisation instantanée, accusés de lecture, et compatibilité complète avec la collection <code class="bg-slate-100 px-1.5 py-0.5 rounded text-teal-800 font-mono text-sm">utilisateurs</code> existante.
+    </p>
+
+    <!-- Call to Actions -->
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+      <a href="./chat.html" class="px-6 py-3 bg-teal-700 hover:bg-teal-800 text-white font-semibold text-sm rounded-xl shadow-sm transition-all hover:shadow-md">
+        Accéder aux discussions
+      </a>
+      <a href="./login.html" class="px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-sm rounded-xl transition-all">
+        Se connecter / S'inscrire
+      </a>
+    </div>
+
+    <!-- Grille des fonctionnalités clés -->
+    <div class="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 w-full text-left">
+      
+      <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center mb-4 font-bold">
+          ⚡
+        </div>
+        <h2 class="text-sm font-bold text-slate-900 mb-1">Temps Réel Absolu</h2>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Les messages s'affichent instantanément grâce aux flux Firestore <code>onSnapshot</code> avec accusés de réception et de lecture.
+        </p>
+      </div>
+
+      <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center mb-4 font-bold">
+          🔒
+        </div>
+        <h2 class="text-sm font-bold text-slate-900 mb-1">Sécurité Zéro-Trust</h2>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Règles Firestore strictes vérifiant l'appartenance aux conversations, protégeant l'intégrité de la collection <code>utilisateurs</code>.
+        </p>
+      </div>
+
+      <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center mb-4 font-bold">
+          🌐
+        </div>
+        <h2 class="text-sm font-bold text-slate-900 mb-1">Hébergement GitHub Pages</h2>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Zéro coût d'hébergement serveur, chemins d'accès 100% relatifs et compatibilité PWA pour installation sur smartphone et bureau.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Guide de déploiement GitHub Pages & Configuration Firebase -->
+    <div id="firebase-setup" class="mt-16 w-full bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-2xs">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900">Configuration de l'instance Firebase Lumesys</h3>
+          <p class="text-xs text-slate-500">Connexion sécurisée directe depuis le navigateur sans exposer de clé privée côté serveur</p>
+        </div>
+        <button id="open-config-btn" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors">
+          Renseigner mes identifiants
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600">
+        <div>
+          <h4 class="font-semibold text-slate-800 mb-1">Structure Firestore requise :</h4>
+          <ul class="list-disc list-inside space-y-1 text-slate-500">
+            <li>Collection existante : <code class="text-teal-700">utilisateurs/{userId}</code></li>
+            <li>Collection de messagerie : <code class="text-teal-700">conversations/{conversationId}</code></li>
+            <li>Sous-collection : <code class="text-teal-700">conversations/{id}/messages/{messageId}</code></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-semibold text-slate-800 mb-1">Compatibilité GitHub Pages :</h4>
+          <p class="text-slate-500 leading-relaxed">
+            Pour déployer sur GitHub Pages, poussez ce dépôt sur GitHub, activez <strong>Pages</strong> dans les réglages (branche <em>main</em>, dossier <em>root</em> ou <em>dist</em>), et accédez à votre URL gratuite <code>https://MON-COMPTE.github.io/MON-REPOSITORY/</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modale de configuration Firebase -->
+  <div id="config-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+      <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+        <h3 class="text-base font-bold text-slate-900">Configuration Firebase Lumesys</h3>
+        <button id="close-config-btn" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">
+        Vos clés sont stockées localement dans votre navigateur et transmises exclusivement aux serveurs officiels de Google Firebase.
+      </p>
+      <form id="firebase-config-form" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">API Key</label>
+          <input id="input-api-key" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="AIzaSy...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Auth Domain</label>
+          <input id="input-auth-domain" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="lumesys-app.firebaseapp.com">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Project ID</label>
+          <input id="input-project-id" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="lumesys-app">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Storage Bucket (Optionnel)</label>
+          <input id="input-storage-bucket" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" placeholder="lumesys-app.appspot.com">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">App ID</label>
+          <input id="input-app-id" type="text" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" required placeholder="1:123456789:web:abcdef">
+        </div>
+        <div class="pt-3 flex gap-2 justify-end">
+          <button type="button" id="cancel-config-btn" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">
+            Annuler
+          </button>
+          <button type="submit" class="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold">
+            Enregistrer & Actualiser
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Pied de page -->
+  <footer class="w-full bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>© LUMA — Écosystème Lumesys. Messagerie réelle temps réel.</p>
+      <div class="flex items-center gap-4 font-medium">
+        <a href="./chat.html" class="hover:text-teal-700">Messagerie</a>
+        <a href="./login.html" class="hover:text-teal-700">Connexion</a>
+        <a href="./profile.html" class="hover:text-teal-700">Profil</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script de détection d'authentification et routage -->
+  <script type="module">
+    import { AuthService } from './js/auth.js';
+    import { getStoredFirebaseConfig, saveFirebaseConfig } from './js/firebase-config.js';
+
+    // Mise à jour des boutons de navigation selon la session
+    AuthService.init((user) => {
+      const chatLink = document.getElementById('nav-chat-link');
+      const loginLink = document.getElementById('nav-login-link');
+      const profileLink = document.getElementById('nav-profile-link');
+
+      if (user) {
+        if (chatLink) chatLink.classList.remove('hidden');
+        if (profileLink) profileLink.classList.remove('hidden');
+        if (loginLink) loginLink.classList.add('hidden');
+      } else {
+        if (chatLink) chatLink.classList.add('hidden');
+        if (profileLink) profileLink.classList.add('hidden');
+        if (loginLink) loginLink.classList.remove('hidden');
+      }
+    });
+
+    // Gestion de la modale de config
+    const configBtn = document.getElementById('open-config-btn');
+    const configModal = document.getElementById('config-modal');
+    const closeConfigBtn = document.getElementById('close-config-btn');
+    const cancelConfigBtn = document.getElementById('cancel-config-btn');
+    const form = document.getElementById('firebase-config-form');
+
+    const openModal = () => {
+      const stored = getStoredFirebaseConfig() || {};
+      document.getElementById('input-api-key').value = stored.apiKey || '';
+      document.getElementById('input-auth-domain').value = stored.authDomain || '';
+      document.getElementById('input-project-id').value = stored.projectId || '';
+      document.getElementById('input-storage-bucket').value = stored.storageBucket || '';
+      document.getElementById('input-app-id').value = stored.appId || '';
+      configModal.classList.remove('hidden');
+    };
+
+    const closeModal = () => configModal.classList.add('hidden');
+
+    if (configBtn) configBtn.addEventListener('click', openModal);
+    if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeModal);
+    if (cancelConfigBtn) cancelConfigBtn.addEventListener('click', closeModal);
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const cfg = {
+          apiKey: document.getElementById('input-api-key').value.trim(),
+          authDomain: document.getElementById('input-auth-domain').value.trim(),
+          projectId: document.getElementById('input-project-id').value.trim(),
+          storageBucket: document.getElementById('input-storage-bucket').value.trim(),
+          appId: document.getElementById('input-app-id').value.trim(),
+        };
+        if (saveFirebaseConfig(cfg)) {
+          window.location.reload();
+        }
+      });
+    }
+  </script>
+</body>
+</html>

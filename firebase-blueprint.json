@@ -1,0 +1,151 @@
+{
+  "entities": {
+    "Utilisateur": {
+      "title": "Utilisateur Lumesys",
+      "description": "Profil utilisateur existant dans l'écosystème Lumesys",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Identifiant unique Firebase Authentication"
+        },
+        "nom": {
+          "type": "string",
+          "description": "Nom complet ou affiché de l'utilisateur",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Adresse email de l'utilisateur"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "URL de la photo de profil ou avatar"
+        },
+        "statut": {
+          "type": "string",
+          "description": "Statut de présence (en ligne, hors ligne, absent)",
+          "enum": ["online", "offline", "away"]
+        },
+        "dernierVu": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de dernière activité"
+        },
+        "bio": {
+          "type": "string",
+          "description": "Courte biographie ou statut personnalisé",
+          "maxLength": 300
+        }
+      },
+      "required": ["email", "nom"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Fil de discussion privé ou de groupe",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifiant de la conversation"
+        },
+        "participants": {
+          "type": "array",
+          "description": "Liste des UIDs des participants"
+        },
+        "participantDetails": {
+          "type": "object",
+          "description": "Détails mis en cache des participants (nom, avatar, email)"
+        },
+        "dernierMessage": {
+          "type": "string",
+          "description": "Texte du dernier message échangé",
+          "maxLength": 1000
+        },
+        "dernierMessageDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage du dernier message"
+        },
+        "dernierMessageExpediteur": {
+          "type": "string",
+          "description": "UID de l'auteur du dernier message"
+        },
+        "nonLus": {
+          "type": "object",
+          "description": "Compteur de messages non lus par UID de participant"
+        },
+        "creeLe": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Date de création de la conversation"
+        },
+        "misAJourLe": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Date de dernière mise à jour"
+        }
+      },
+      "required": ["participants", "creeLe"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message individuel dans une conversation",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifiant unique du message"
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "ID de la conversation parente"
+        },
+        "expediteurId": {
+          "type": "string",
+          "description": "UID de l'expéditeur"
+        },
+        "expediteurNom": {
+          "type": "string",
+          "description": "Nom affiché de l'expéditeur au moment de l'envoi",
+          "maxLength": 100
+        },
+        "contenu": {
+          "type": "string",
+          "description": "Corps textuel du message",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "dateEnvoi": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp serveur d'envoi"
+        },
+        "luPar": {
+          "type": "array",
+          "description": "Liste des UIDs ayant lu le message"
+        },
+        "pieceJointe": {
+          "type": "object",
+          "description": "Métadonnées de fichier ou image optionnelle"
+        }
+      },
+      "required": ["expediteurId", "contenu", "dateEnvoi"]
+    }
+  },
+  "firestore": {
+    "/utilisateurs/{userId}": {
+      "schema": { "$ref": "#/entities/Utilisateur" },
+      "description": "Collection existante des utilisateurs de l'écosystème Lumesys"
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Fils de conversation entre utilisateurs"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Messages temps réel d'une conversation"
+    }
+  }
+}
