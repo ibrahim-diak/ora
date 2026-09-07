@@ -4,6 +4,11 @@
  * Utilise la collection Firestore :
  *
  * chats/{chatId}
+ * chats/{chatId}/messages/{messageId}
+ *
+ * IMPORTANT :
+ * - Les participants des chats sont des EMAILS.
+ * - Les messages utilisent le UID Firebase pour expediteurId.
  */
 
 import { Database } from './database.js';
@@ -11,16 +16,11 @@ import { Database } from './database.js';
 
 export const ConversationsService = {
 
-
   /* ==========================================================
-     ABONNEMENT AUX CHATS
+     ABONNEMENT AUX CONVERSATIONS
   ========================================================== */
 
-  abonnerConversations(
-    userId,
-    onUpdate,
-    onError
-  ) {
+  abonnerConversations(userId, onUpdate, onError) {
 
     return Database.ecouterConversations(
       userId,
@@ -34,122 +34,74 @@ export const ConversationsService = {
      RÉCUPÉRER L'AUTRE PARTICIPANT
   ========================================================== */
 
-  getAutreParticipant(
-    conv,
-    currentUserId
-  ) {
+  getAutreParticipant(conv, currentUser) {
 
     if (
       !conv ||
-      !Array.isArray(
-        conv.participants
-      )
+      !Array.isArray(conv.participants)
     ) {
+      return null;
+    }
 
+    const currentEmail = (
+      currentUser?.email ||
+      ''
+    )
+      .toLowerCase()
+      .trim();
+
+
+    /*
+     * Les participants sont stockés sous forme d'emails.
+     */
+    const participants = conv.participants
+      .map((email) => String(email).toLowerCase().trim());
+
+
+    /*
+     * Chercher l'email de l'autre participant.
+     */
+    const autreEmail = participants.find(
+      (email) => email !== currentEmail
+    );
+
+
+    if (!autreEmail) {
       return null;
     }
 
 
     /*
-     * Le nouveau système utilise les emails.
-     */
-    const currentUser =
-      Database &&
-      null;
-
-
-    /*
-     * On cherche d'abord grâce aux participantDetails.
+     * Récupérer les détails du participant.
      */
     const details =
-      conv.participantDetails ||
-      {};
-
-
-    const participants =
-      conv.participants;
-
-
-    /*
-     * Le currentUserId peut être un UID.
-     * On identifie donc l'utilisateur actuel
-     * grâce à son email lorsque possible.
-     */
-
-    let currentEmail = null;
-
-
-    try {
-
-      const auth =
-        window.firebaseAuthCurrentUser;
-
-      if (
-        auth &&
-        auth.email
-      ) {
-
-        currentEmail =
-          auth.email
-            .toLowerCase()
-            .trim();
-      }
-
-    } catch (e) {
-      // Aucun problème : fallback ci-dessous.
-    }
-
-
-    /*
-     * Chercher l'autre email.
-     */
-    let autreEmail =
-      participants.find(
-        (email) =>
-          email !== currentEmail
-      );
-
-
-    /*
-     * Si currentEmail n'est pas disponible,
-     * prendre le deuxième participant.
-     */
-    if (!autreEmail) {
-
-      autreEmail =
-        participants[0];
-    }
-
-
-    if (!autreEmail) {
-      return null;
-    }
-
-
-    const autreDetails =
-      details[autreEmail] ||
-      {};
+      conv.participantDetails?.[autreEmail] || {};
 
 
     return {
 
       uid:
-        autreDetails.uid ||
+        details.uid ||
         '',
 
       nom:
-        autreDetails.nom ||
+        details.nom ||
         autreEmail ||
         'Utilisateur Lumesys',
 
       email:
-        autreDetails.email ||
+        details.email ||
         autreEmail ||
         '',
 
       photoUrl:
-        autreDetails.photoUrl ||
-        ''
+        details.photoUrl ||
+        details.photo ||
+        '',
+
+      statut:
+        details.statut ||
+        'offline'
     };
   },
 
@@ -158,10 +110,31 @@ export const ConversationsService = {
      DÉMARRER UNE CONVERSATION
   ========================================================== */
 
-  async demarrerConversation(
-    moi,
-    destinataire
-  ) {
+  async demarrerConversation(moi, destinataire) {
+
+    if (!moi || !destinataire) {
+
+      throw new Error(
+        'Utilisateur source ou destinataire manquant.'
+      );
+    }
+
+
+    if (!moi.email) {
+
+      throw new Error(
+        'L’utilisateur connecté ne possède pas d’adresse email.'
+      );
+    }
+
+
+    if (!destinataire.email) {
+
+      throw new Error(
+        'Le destinataire ne possède pas d’adresse email.'
+      );
+    }
+
 
     return await Database.creerOuRecupererConversation(
       moi,
@@ -171,7 +144,7 @@ export const ConversationsService = {
 
 
   /* ==========================================================
-     MARQUER LE CHAT COMME LU
+     MARQUER UNE CONVERSATION COMME LUE
   ========================================================== */
 
   async marquerLue(
@@ -179,9 +152,15 @@ export const ConversationsService = {
     currentUserId
   ) {
 
+    if (!conversationId) {
+      return;
+    }
+
+
     return await Database.marquerConversationCommeLue(
       conversationId,
       currentUserId
     );
   }
 };
+
