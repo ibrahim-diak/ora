@@ -27,6 +27,11 @@
   box-sizing: border-box;
 }
 
+[hidden],
+.hidden {
+  display: none !important;
+}
+
 html, body {
   height: 100%;
   margin: 0;
